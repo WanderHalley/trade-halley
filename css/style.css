@@ -1,0 +1,257 @@
+/* ═══════════════════════════════════════════════
+   TRADE HALLEY - Estilos Principais
+   ═══════════════════════════════════════════════ */
+
+:root {
+    --size-sidebar: 260px;
+    --color-primary: #2d499d;
+    --color-sidebar: #2c2e2f;
+    --color-sidebar-bg: #2d499d;
+}
+
+body {
+    font-family: 'Roboto', sans-serif;
+    background-color: #fff !important;
+    overflow-x: hidden;
+}
+
+/* ─── Layout Grid ─── */
+#app {
+    display: grid;
+    grid-template-columns: var(--size-sidebar) calc(100vw - var(--size-sidebar));
+}
+
+/* ─── Sidebar ─── */
+#sidebar {
+    background-color: var(--color-sidebar);
+    z-index: 999;
+}
+#sidebar.active .sidebar-wrapper {
+    left: 0;
+}
+#sidebar:not(.active) .sidebar-wrapper {
+    left: -300px;
+}
+#sidebar:not(.active) ~ #main {
+    margin-left: 0;
+}
+
+.sidebar-wrapper {
+    width: var(--size-sidebar);
+    height: 100vh;
+    position: relative;
+    top: 0;
+    z-index: 10;
+    overflow-y: auto;
+    background-color: var(--color-sidebar-bg);
+    box-shadow: 1px 1px 2px #000;
+    bottom: 0;
+    transition: left 0.5s ease-out;
+}
+
+.sidebar-header {
+    padding: 2rem 1.5rem 1rem;
+}
+.sidebar-header img {
+    width: 100%;
+    max-width: 12rem;
+    height: auto;
+}
+
+.sidebar-menu .menu {
+    padding: 0;
+    list-style: none;
+}
+
+.sidebar-title {
+    padding: 0 1rem;
+    margin: 1.5rem 0 1rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff;
+    list-style: none;
+}
+
+.submenu {
+    list-style: none;
+    padding: 0;
+}
+
+.sidebar-item {
+    list-style: none;
+    margin-top: 0.3rem;
+}
+
+.sidebar-link {
+    display: block;
+    padding: 0.7rem 1rem;
+    font-size: 0.9rem;
+    border-radius: 0.5rem;
+    text-decoration: none;
+    color: rgba(255,255,255,0.85);
+    transition: all 0.3s;
+}
+.sidebar-link:hover {
+    background-color: rgba(255,255,255,0.1);
+    color: #fff;
+}
+
+/* ─── Main ─── */
+#main {
+    display: flex;
+    justify-content: center;
+}
+#main > * {
+    width: 100%;
+}
+
+.bg-interno {
+    background-color: #eee;
+    min-height: 100vh;
+}
+
+/* ─── Header ─── */
+header {
+    z-index: 99;
+    position: fixed;
+    right: 0;
+    width: calc(100% - var(--size-sidebar));
+    background-color: #fff;
+    border-bottom: 1px solid #ededed;
+}
+header .navbar {
+    height: 70px;
+    padding: 1.2rem;
+}
+
+/* ─── Page Heading ─── */
+.page-heading {
+    position: fixed;
+    top: 71px;
+    right: 0;
+    z-index: 98;
+    width: calc(100% - var(--size-sidebar));
+    padding: 0.5rem 1rem;
+    background-color: #f8f8f8;
+    border-bottom: 1px solid #dbdbdb;
+    color: var(--color-primary);
+}
+.page-heading h2 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 0;
+}
+.page-heading p {
+    margin-bottom: 0;
+    font-size: 0.85rem;
+}
+
+/* ─── Page Content ─── */
+.page {
+    margin-top: 140px;
+    background-color: #fff;
+    padding: 1rem;
+}
+.container {
+    width: 100%;
+    max-width: 1400px;
+}
+
+/* ─── Card ─── */
+.card {
+    margin-bottom: 2rem;
+    border: none;
+    padding: 1rem;
+}
+.card .card-header {
+    background-color: transparent;
+    border-bottom: 1px solid #ededed;
+    padding: 0 0 0.5rem;
+}
+.card .card-header h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--color-primary);
+}
+.card .card-body {
+    padding: 1rem;
+}
+
+/* ─── Form ─── */
+.form-group {
+    margin-bottom: 0.7rem;
+}
+.form-group label {
+    color: rgba(35,28,99,0.7);
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+/* ─── Results Table ─── */
+.results-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.results-table th {
+    background-color: #f5f5f5;
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-bottom: 2px solid #ddd;
+    cursor: pointer;
+    user-select: none;
+}
+.results-table th:hover {
+    background-color: #e8e8e8;
+}
+.results-table td {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    border-bottom: 1px solid #eee;
+}
+.results-table tr:hover {
+    background-color: #f8f9ff;
+}
+
+.positive { color: #198754; font-weight: 600; }
+.negative { color: #dc3545; font-weight: 600; }
+
+/* ─── Modal ─── */
+.stat-card {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+}
+.stat-card .stat-label {
+    font-size: 0.75rem;
+    color: #666;
+    font-weight: 600;
+}
+.stat-card .stat-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #333;
+}
+
+/* ─── Responsivo ─── */
+@media screen and (max-width: 1199px) {
+    .sidebar-wrapper {
+        position: absolute;
+        left: -300px;
+    }
+    #app {
+        grid-template-columns: 1fr;
+    }
+    header, .page-heading {
+        width: 100%;
+    }
+}
+
+/* ─── Select2 ─── */
+.select2-container--default .select2-selection--multiple {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    min-height: 38px;
+}
