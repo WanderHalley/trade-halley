@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════
 
 // Configurar URL da API (Hugging Face Spaces)
-const API_BASE = 'https://SEU-USUARIO-huggingface.hf.space';
+const API_BASE = 'https://Wanderhalleylee-trade-halley.hf.space';
 // Para desenvolvimento local: const API_BASE = 'http://localhost:7860';
 
 const TradeHalleyAPI = {
