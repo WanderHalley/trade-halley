@@ -381,103 +381,159 @@ const App = (() => {
         } catch (e) { res.innerHTML = `<div class="card"><div class="card-body"><p class="negative">Erro: ${e.message}</p></div></div>`; }
     }
 
+        // ============================================================
+    // STRATEGIES PAGE — Trade Certo style, by timeframe
     // ============================================================
-    // STRATEGIES PAGE (NOVA)
-    // ============================================================
+
+    const TRADE_CERTO_STRATEGIES = {
+        daily: {
+            label: 'B3 Daily',
+            icon: 'fas fa-chart-bar',
+            desc: 'Estratégias para timeframe diário — Ações B3',
+            entry: [
+                { id: 'pct_prev_close', name: 'X% do Fechamento Anterior', desc: 'Compra quando o preço cai X% em relação ao fechamento do dia anterior. Valor de X configurável (ex: -1%, -2%, etc.).', params: ['variation_pct'] },
+                { id: 'pct_prev_close_sniper', name: 'X% do Fechamento Anterior (Sniper)', desc: 'Igual à anterior, mas só entra se o preço TOCA exatamente o alvo durante o pregão, sem gap de abertura. Mais seletivo.', params: ['variation_pct'] },
+                { id: 'pct_prev_open', name: 'X% da Abertura Anterior', desc: 'Compra quando o preço cai X% em relação à abertura do dia anterior.', params: ['variation_pct'] },
+                { id: 'pct_prev_open_sniper', name: 'X% da Abertura Anterior (Sniper)', desc: 'Versão Sniper: só entra se o preço toca o alvo durante o pregão, ignorando gaps.', params: ['variation_pct'] },
+                { id: 'pct_current_open', name: 'X% da Abertura do Dia', desc: 'Compra quando o preço cai X% em relação à abertura do dia atual (abertura corrente).', params: ['variation_pct'] },
+                { id: 'pct_current_open_sniper', name: 'X% da Abertura do Dia (Sniper)', desc: 'Versão Sniper: entra somente se o preço atinge o alvo a partir da abertura do dia corrente.', params: ['variation_pct'] },
+                { id: 'day_open', name: 'Abertura do Dia', desc: 'Compra na abertura do pregão (primeiro preço do dia).', params: [] },
+                { id: 'day_close', name: 'Fechamento do Dia', desc: 'Compra no fechamento do pregão (último preço do dia).', params: [] },
+            ],
+            exit: [
+                { id: 'exit_day_close', name: 'Fechamento do Dia', desc: 'Encerra a posição no fechamento do mesmo dia da entrada.', params: [] },
+                { id: 'exit_next_open', name: 'Abertura do Dia Seguinte', desc: 'Encerra a posição na abertura do dia seguinte à entrada.', params: [] },
+                { id: 'exit_next_close', name: 'Fechamento do Dia Seguinte', desc: 'Encerra a posição no fechamento do dia seguinte à entrada.', params: [] },
+            ],
+        },
+        intraday_b3: {
+            label: 'B3 Intraday',
+            icon: 'fas fa-chart-area',
+            desc: 'Estratégias para timeframe intraday — Ações B3 (5 min / 1h)',
+            entry: [
+                { id: 'intra_pct_prev_close', name: 'X% do Fechamento Anterior', desc: 'Entra quando o preço atinge X% abaixo do fechamento do dia anterior (intraday).', params: ['variation_pct'] },
+                { id: 'intra_pct_prev_close_sniper', name: 'X% Fechamento Anterior (Sniper)', desc: 'Versão Sniper intraday — sem gap, preço deve tocar o alvo durante o dia.', params: ['variation_pct'] },
+                { id: 'intra_pct_prev_open', name: 'X% da Abertura Anterior', desc: 'Entrada baseada em X% de variação sobre a abertura do dia anterior.', params: ['variation_pct'] },
+                { id: 'intra_pct_prev_open_sniper', name: 'X% Abertura Anterior (Sniper)', desc: 'Versão Sniper.', params: ['variation_pct'] },
+                { id: 'intra_pct_current_open', name: 'X% da Abertura do Dia', desc: 'Entrada quando o preço cai X% em relação à abertura do dia corrente.', params: ['variation_pct'] },
+                { id: 'intra_pct_current_open_sniper', name: 'X% Abertura do Dia (Sniper)', desc: 'Versão Sniper.', params: ['variation_pct'] },
+                { id: 'intra_bb_lower', name: 'Toque na Banda Inferior de Bollinger', desc: 'Entrada quando o preço toca ou rompe a banda inferior de Bollinger (período e desvio configuráveis).', params: ['period', 'std_dev'] },
+                { id: 'intra_bb_upper', name: 'Toque na Banda Superior de Bollinger', desc: 'Entrada quando o preço toca ou rompe a banda superior de Bollinger.', params: ['period', 'std_dev'] },
+                { id: 'intra_sma_touch', name: 'Toque na Média Móvel Simples', desc: 'Entrada quando o preço toca a SMA de período configurável.', params: ['period'] },
+                { id: 'intra_ema_touch', name: 'Toque na Média Móvel Exponencial', desc: 'Entrada quando o preço toca a EMA de período configurável.', params: ['period'] },
+                { id: 'intra_specific_time', name: 'Horário Específico', desc: 'Entrada em horário exato configurável (ex: 10:30, 14:00).', params: ['time'] },
+                { id: 'intra_day_open', name: 'Abertura do Dia', desc: 'Entrada no primeiro candle do dia.', params: [] },
+                { id: 'intra_day_close', name: 'Fechamento do Dia', desc: 'Entrada no último candle antes do leilão de fechamento.', params: [] },
+            ],
+            exit: [
+                { id: 'exit_intra_day_close', name: 'Fechamento do Dia (Leilão)', desc: 'Encerra no fechamento do pregão ou antes do leilão.', params: [] },
+                { id: 'exit_intra_pct_profit', name: 'Percentual de Lucro (Gain %)', desc: 'Encerra quando atinge X% de lucro sobre o preço de entrada.', params: ['gain_pct'] },
+                { id: 'exit_intra_pct_loss', name: 'Stop-Loss %', desc: 'Encerra quando a perda atinge X% sobre o preço de entrada.', params: ['stop_pct'] },
+                { id: 'exit_intra_specific_time', name: 'Horário Específico', desc: 'Encerra em horário exato (ex: 16:45).', params: ['time'] },
+                { id: 'exit_intra_bb_upper', name: 'Banda Superior de Bollinger', desc: 'Encerra quando o preço atinge a banda superior.', params: ['period', 'std_dev'] },
+                { id: 'exit_intra_bb_lower', name: 'Banda Inferior de Bollinger', desc: 'Encerra quando o preço atinge a banda inferior.', params: ['period', 'std_dev'] },
+                { id: 'exit_intra_sma', name: 'Média Móvel Simples', desc: 'Encerra quando o preço cruza a SMA.', params: ['period'] },
+                { id: 'exit_intra_ema', name: 'Média Móvel Exponencial', desc: 'Encerra quando o preço cruza a EMA.', params: ['period'] },
+                { id: 'exit_intra_next_open', name: 'Abertura do Dia Seguinte', desc: 'Encerra na abertura do próximo pregão (swing overnight).', params: [] },
+            ],
+        },
+        intraday_bmf: {
+            label: 'BMF Intraday',
+            icon: 'fas fa-exchange-alt',
+            desc: 'Estratégias para futuros BMF — Intraday (5 min / 1h)',
+            entry: [
+                { id: 'bmf_pct_prev_close', name: 'X% do Fechamento Anterior', desc: 'Entrada baseada em variação % do fechamento do dia anterior (futuros).', params: ['variation_pct'] },
+                { id: 'bmf_pct_prev_close_sniper', name: 'X% Fechamento Anterior (Sniper)', desc: 'Versão Sniper para futuros.', params: ['variation_pct'] },
+                { id: 'bmf_pct_prev_open', name: 'X% da Abertura Anterior', desc: 'Entrada baseada em variação % da abertura anterior.', params: ['variation_pct'] },
+                { id: 'bmf_pct_prev_open_sniper', name: 'X% Abertura Anterior (Sniper)', desc: 'Versão Sniper.', params: ['variation_pct'] },
+                { id: 'bmf_pct_current_open', name: 'X% da Abertura do Dia', desc: 'Entrada em X% da abertura corrente.', params: ['variation_pct'] },
+                { id: 'bmf_pct_current_open_sniper', name: 'X% Abertura do Dia (Sniper)', desc: 'Versão Sniper.', params: ['variation_pct'] },
+                { id: 'bmf_bb_lower', name: 'Toque na Banda Inferior de Bollinger', desc: 'Entrada na banda inferior de Bollinger.', params: ['period', 'std_dev'] },
+                { id: 'bmf_bb_upper', name: 'Toque na Banda Superior de Bollinger', desc: 'Entrada na banda superior.', params: ['period', 'std_dev'] },
+                { id: 'bmf_sma_touch', name: 'Toque na Média Móvel Simples', desc: 'Entrada quando preço toca SMA.', params: ['period'] },
+                { id: 'bmf_ema_touch', name: 'Toque na Média Móvel Exponencial', desc: 'Entrada quando preço toca EMA.', params: ['period'] },
+                { id: 'bmf_specific_time', name: 'Horário Específico', desc: 'Entrada em horário exato.', params: ['time'] },
+                { id: 'bmf_day_open', name: 'Abertura do Dia', desc: 'Entrada no primeiro candle do dia.', params: [] },
+                { id: 'bmf_day_close', name: 'Fechamento do Dia', desc: 'Entrada no último candle.', params: [] },
+            ],
+            exit: [
+                { id: 'exit_bmf_day_close', name: 'Fechamento do Dia', desc: 'Encerra no fechamento do pregão.', params: [] },
+                { id: 'exit_bmf_pct_profit', name: 'Percentual de Lucro (Gain %)', desc: 'Saída ao atingir X% de lucro.', params: ['gain_pct'] },
+                { id: 'exit_bmf_pct_loss', name: 'Stop-Loss %', desc: 'Saída ao atingir X% de perda.', params: ['stop_pct'] },
+                { id: 'exit_bmf_specific_time', name: 'Horário Específico', desc: 'Saída em horário exato.', params: ['time'] },
+                { id: 'exit_bmf_bb_upper', name: 'Banda Superior de Bollinger', desc: 'Saída na banda superior.', params: ['period', 'std_dev'] },
+                { id: 'exit_bmf_bb_lower', name: 'Banda Inferior de Bollinger', desc: 'Saída na banda inferior.', params: ['period', 'std_dev'] },
+                { id: 'exit_bmf_sma', name: 'Média Móvel Simples', desc: 'Saída ao cruzar SMA.', params: ['period'] },
+                { id: 'exit_bmf_ema', name: 'Média Móvel Exponencial', desc: 'Saída ao cruzar EMA.', params: ['period'] },
+                { id: 'exit_bmf_next_open', name: 'Abertura do Dia Seguinte', desc: 'Encerra na abertura do próximo dia.', params: [] },
+            ],
+        },
+    };
 
     async function renderStrategiesPage() {
         const content = document.getElementById('pageContent');
-        content.innerHTML = loadingHTML('Carregando estratégias...');
 
-        let strats = [];
-        try {
-            const s = await API.getStrategies();
-            strats = s.strategies || [];
-        } catch (e) {
-            content.innerHTML = `<p class="negative">Erro ao carregar estratégias: ${e.message}</p>`;
-            return;
-        }
-
-        // Categorize by type
-        const daily = strats.filter(s => !s.category.toLowerCase().includes('intraday'));
-        const intra = strats; // all strategies can be used for intraday too
-
-        // Build timeframe tabs
-        const timeframes = [
-            { id: 'daily', label: 'B3 Daily', icon: 'fas fa-chart-bar', desc: 'Estratégias para timeframe diário (ações B3)' },
-            { id: 'intraday_b3', label: 'B3 Intraday', icon: 'fas fa-chart-area', desc: 'Estratégias para timeframe intraday (ações B3 - 1h)' },
-            { id: 'intraday_bmf', label: 'BMF Intraday', icon: 'fas fa-exchange-alt', desc: 'Estratégias para futuros BMF (intraday - 1h)' },
-        ];
+        const timeframes = Object.entries(TRADE_CERTO_STRATEGIES);
 
         let tabBtns = '';
         let tabPanels = '';
 
-        timeframes.forEach((tf, i) => {
-            tabBtns += `<button class="tab-btn${i===0?' active':''}" data-stab="${tf.id}">${tf.label}</button>`;
+        timeframes.forEach(([tfId, tf], i) => {
+            tabBtns += `<button class="tab-btn${i===0?' active':''}" data-stab="${tfId}">${tf.label}</button>`;
 
-            // Entry strategies
-            const entryStrats = strats.filter(s => {
-                if (tf.id === 'daily') return true; // all applicable to daily
-                return true; // all applicable to intraday too
-            });
-
-            // Exit strategies (for now same list, backend decides)
-            const exitStrats = strats;
-
-            let cards = '';
-            entryStrats.forEach(s => {
-                cards += `
+            const entryCards = tf.entry.map(s => `
                 <div class="strategy-card">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start">
-                        <div>
-                            <div class="strategy-name">${s.name}</div>
-                            <span class="badge badge-blue" style="margin-bottom:8px">${s.category}</span>
-                        </div>
-                        <span class="badge badge-green">Ativa</span>
+                        <div class="strategy-name">${s.name}</div>
+                        <span class="badge badge-green" style="font-size:10px">Entrada</span>
                     </div>
-                    <div class="strategy-desc">${s.description}</div>
-                    <div style="margin-top:12px;display:flex;gap:8px">
-                        <span class="badge badge-yellow" style="font-size:10px">ID: ${s.id}</span>
+                    <div class="strategy-desc">${s.desc}</div>
+                    ${s.params.length ? `<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap">${s.params.map(p => `<span class="badge badge-yellow" style="font-size:10px">${p}</span>`).join('')}</div>` : ''}
+                </div>`).join('');
+
+            const exitCards = tf.exit.map(s => `
+                <div class="strategy-card" style="border-left:3px solid var(--red-primary)">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                        <div class="strategy-name">${s.name}</div>
+                        <span class="badge badge-red" style="font-size:10px">Saída</span>
                     </div>
-                </div>`;
-            });
+                    <div class="strategy-desc">${s.desc}</div>
+                    ${s.params.length ? `<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap">${s.params.map(p => `<span class="badge badge-yellow" style="font-size:10px">${p}</span>`).join('')}</div>` : ''}
+                </div>`).join('');
 
             tabPanels += `
-            <div id="sTab_${tf.id}" class="stab-panel" style="${i>0?'display:none':''}">
-                <div style="margin-bottom:1rem">
-                    <p style="color:var(--text-muted);font-size:13px"><i class="${tf.icon}" style="color:var(--green-primary);margin-right:6px"></i>${tf.desc}</p>
+            <div id="sTab_${tfId}" class="stab-panel" style="${i>0?'display:none':''}">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem">
+                    <i class="${tf.icon}" style="color:var(--green-primary)"></i>
+                    <span style="color:var(--text-muted);font-size:13px">${tf.desc}</span>
                 </div>
                 <div style="display:flex;gap:8px;margin-bottom:1.5rem">
-                    <span class="badge badge-green">${entryStrats.length} estratégias disponíveis</span>
+                    <span class="badge badge-green">${tf.entry.length} entradas</span>
+                    <span class="badge badge-red">${tf.exit.length} saídas</span>
                 </div>
-                <div class="strategy-grid">${cards}</div>
+
+                <h4 style="color:var(--green-primary);margin-bottom:12px;font-size:14px"><i class="fas fa-sign-in-alt"></i> Estratégias de Entrada</h4>
+                <div class="strategy-grid" style="margin-bottom:2rem">${entryCards}</div>
+
+                <h4 style="color:var(--red-primary);margin-bottom:12px;font-size:14px"><i class="fas fa-sign-out-alt"></i> Estratégias de Saída</h4>
+                <div class="strategy-grid">${exitCards}</div>
             </div>`;
         });
 
         content.innerHTML = `
         <div class="card">
             <div class="card-header">
-                <span class="card-title"><i class="fas fa-brain"></i> Gestão de Estratégias</span>
+                <span class="card-title"><i class="fas fa-brain"></i> Estratégias Trade Certo</span>
                 <div class="card-actions">
-                    <span class="badge badge-green">${strats.length} estratégias no sistema</span>
+                    <span class="badge badge-green">${timeframes.reduce((t,[,tf]) => t + tf.entry.length + tf.exit.length, 0)} estratégias</span>
                 </div>
             </div>
             <div class="card-body">
                 <div class="tab-nav" id="stratTabs" style="margin-bottom:1.5rem">${tabBtns}</div>
                 ${tabPanels}
-                <div style="margin-top:2rem;padding:1.5rem;background:var(--bg-tertiary);border-radius:var(--radius-md);border:1px dashed var(--border-light)">
-                    <h4 style="color:var(--text-primary);margin-bottom:8px"><i class="fas fa-info-circle" style="color:var(--blue-primary)"></i> Sobre as Estratégias</h4>
-                    <p style="color:var(--text-secondary);font-size:13px;line-height:1.6">
-                        As estratégias são definidas no backend (<code>strategies.py</code>) e carregadas automaticamente.
-                        Para adicionar novas estratégias do tipo Trade Certo (% do fechamento anterior, sniper, Bollinger, etc.),
-                        o <code>strategy_engine.py</code> será implementado na Phase 2 do backend, conectando com as 55 estratégias
-                        já inseridas no Supabase. As estratégias atuais (13) são baseadas em indicadores técnicos clássicos.
-                    </p>
-                </div>
             </div>
         </div>`;
 
-        // Tab switching
         document.querySelectorAll('#stratTabs .tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('#stratTabs .tab-btn').forEach(b => b.classList.remove('active'));
@@ -488,6 +544,7 @@ const App = (() => {
             });
         });
     }
+
 
     // ============================================================
     // SAVED BACKTESTS
