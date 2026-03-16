@@ -1,81 +1,99 @@
 /**
- * Trade Halley - API Client
+ * Trade Halley - API Client v2.0
  * Comunicação com o backend FastAPI
  */
-
 const API = (() => {
-  // ==============================================
-  // URL DO SEU HUGGING FACE SPACE
-  // ==============================================
-  const BASE_URL = 'https://wanderhalleylee-trade-halley.hf.space';
+    // ===== ALTERE PARA SUA URL DO HUGGING FACE SPACE =====
+    const BASE_URL = 'https://wanderhalleylee-trade-halley.hf.space';
 
-  async function request(endpoint, params = {}) {
-    const url = new URL(`${BASE_URL}${endpoint}`);
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== null && value !== undefined && value !== '') {
-        url.searchParams.append(key, value);
-      }
-    });
+    let _cachedStrategies = null;
 
-    try {
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-      });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.detail || `Erro ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error(`API Error [${endpoint}]:`, error);
-      throw error;
+    async function request(endpoint, options = {}) {
+        const url = `${BASE_URL}${endpoint}`;
+        try {
+            const response = await fetch(url, {
+                ...options,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...options.headers,
+                },
+            });
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err.detail || `HTTP ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error(`API Error [${endpoint}]:`, error.message);
+            throw error;
+        }
     }
-  }
 
-  return {
-    // Status
-    health: () => request('/health'),
+    return {
+        getBaseUrl: () => BASE_URL,
 
-    // Ativos
-    getAssets: (market = 'all') => request('/assets', { market }),
-    getAssetInfo: (ticker) => request(`/asset/${ticker}`),
+        // Status
+        health: () => request('/health'),
+        root: () => request('/'),
 
-    // Dados de Mercado
-    getMarketData: (ticker, period = '6mo', interval = '1d') =>
-      request(`/market-data/${ticker}`, { period, interval }),
+        // Assets
+        getAssets: (market = 'all') => request(`/assets?market=${market}`),
+        getAssetInfo: (ticker) => request(`/asset/${ticker}`),
 
-    // Estratégias
-    getStrategies: () => request('/strategies'),
+        // Market Data
+        getMarketData: (ticker, period = '6mo', interval = '1d', source = 'auto') =>
+            request(`/market-data/${ticker}?period=${period}&interval=${interval}&source=${source}`),
 
-    // Back-test individual
-    runBacktest: (ticker, strategy, options = {}) =>
-      request('/backtest', {
-        ticker,
-        strategy,
-        period: options.period || '1y',
-        interval: options.interval || '1d',
-        capital: options.capital || 10000,
-        stop_loss: options.stopLoss || null,
-        take_profit: options.takeProfit || null,
-      }),
+        // Strategies
+        getStrategies: async () => {
+            if (_cachedStrategies) return _cachedStrategies;
+            _cachedStrategies = await request('/strategies');
+            return _cachedStrategies;
+        },
 
-    // Back-test em massa
-    runBulkBacktest: (market, strategy, options = {}) =>
-      request('/backtest/bulk', {
-        market,
-        strategy,
-        period: options.period || '1y',
-        interval: options.interval || '1d',
-        capital: options.capital || 10000,
-      }),
+        // Backtest
+        runBacktest: (ticker, strategy, period = '1y', interval = '1d', capital = 10000) =>
+            request(`/backtest?ticker=${ticker}&strategy=${strategy}&period=${period}&interval=${interval}&capital=${capital}`),
 
-    // Dashboard
-    getDashboardSummary: () => request('/dashboard/summary'),
+        runBulkBacktest: (market, strategy, period = '1y', interval = '1d', capital = 10000) =>
+            request(`/backtest/bulk?market=${market}&strategy=${strategy}&period=${period}&interval=${interval}&capital=${capital}`),
 
-    // Utilitário
-    getBaseUrl: () => BASE_URL,
-  };
+        compareStrategies: (ticker, period = '1y', interval = '1d', capital = 10000) =>
+            request(`/backtest/compare?ticker=${ticker}&period=${period}&interval=${interval}&capital=${capital}`),
+
+        // Dashboard
+        getDashboardSummary: () => request('/dashboard/summary'),
+
+        // ===== CONFIG (protegido por PIN) =====
+        verifyPin: (pin) => request(`/config/verify-pin?pin=${encodeURIComponent(pin)}`),
+
+        changePin: (oldPin, newPin) =>
+            request(`/config/change-pin?old_pin=${encodeURIComponent(oldPin)}&new_pin=${encodeURIComponent(newPin)}`, { method: 'POST' }),
+
+        getStorageInfo: (pin) =>
+            request(`/config/storage?pin=${encodeURIComponent(pin)}`),
+
+        validateTicker: (ticker, pin) =>
+            request(`/config/validate-ticker?ticker=${encodeURIComponent(ticker)}&pin=${encodeURIComponent(pin)}`),
+
+        downloadData: (ticker, startDate, endDate, timeframe, pin) =>
+            request(`/config/download?ticker=${encodeURIComponent(ticker)}&start_date=${startDate}&end_date=${endDate}&timeframe=${timeframe}&pin=${encodeURIComponent(pin)}`, { method: 'POST' }),
+
+        manualUpdate: (pin) =>
+            request(`/config/update?pin=${encodeURIComponent(pin)}`, { method: 'POST' }),
+
+        deleteAsset: (ticker, pin) =>
+            request(`/config/delete-asset?ticker=${encodeURIComponent(ticker)}&pin=${encodeURIComponent(pin)}`, { method: 'DELETE' }),
+
+        // ===== BACKTESTS SALVOS =====
+        saveBacktest: (ticker, strategy, period = '1y', interval = '1d', capital = 10000) =>
+            request(`/saved-backtests/save?ticker=${ticker}&strategy=${strategy}&period=${period}&interval=${interval}&capital=${capital}`, { method: 'POST' }),
+
+        listSavedBacktests: () => request('/saved-backtests'),
+
+        getSavedBacktest: (id) => request(`/saved-backtests/${id}`),
+
+        deleteSavedBacktest: (id) =>
+            request(`/saved-backtests/${id}`, { method: 'DELETE' }),
+    };
 })();
