@@ -5,9 +5,9 @@
 
 const API = (() => {
   // ==============================================
-  // ALTERE AQUI PARA SUA URL DO HUGGING FACE
+  // URL DO SEU HUGGING FACE SPACE
   // ==============================================
-  const BASE_URL = 'https://SEU-USUARIO-trade-halley-api.hf.space';
+  const BASE_URL = 'https://wanderhalleylee-trade-halley.hf.space';
 
   async function request(endpoint, params = {}) {
     const url = new URL(`${BASE_URL}${endpoint}`);
