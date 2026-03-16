@@ -34,12 +34,10 @@ const App = (() => {
   function navigateTo(page) {
     currentPage = page;
 
-    // Atualiza nav
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     const activeNav = document.querySelector(`.nav-item[data-page="${page}"]`);
     if (activeNav) activeNav.classList.add('active');
 
-    // Atualiza título
     const titles = {
       dashboard: 'Dashboard',
       'b3-daily': 'Back-tests B3 Daily',
@@ -49,10 +47,7 @@ const App = (() => {
     const titleEl = document.getElementById('pageTitle');
     if (titleEl) titleEl.textContent = titles[page] || 'Dashboard';
 
-    // Fecha menu mobile
     closeMobileMenu();
-
-    // Renderiza página
     renderPage(page);
   }
 
@@ -86,12 +81,10 @@ const App = (() => {
   async function renderDashboard(container) {
     container.innerHTML = `
       <div class="fade-in">
-        <!-- Stats Cards -->
         <div class="stats-grid" id="dashStats">
           ${renderStatCardSkeleton(4)}
         </div>
 
-        <!-- Charts Row -->
         <div class="grid-2 section-gap">
           <div class="card">
             <div class="card-header">
@@ -106,7 +99,7 @@ const App = (() => {
               </div>
             </div>
             <div class="card-body">
-              <div class="chart-container"><canvas id="chartIbov"></canvas></div>
+              <div class="chart-container" id="chartIbovContainer"><canvas id="chartIbov"></canvas></div>
             </div>
           </div>
 
@@ -115,12 +108,11 @@ const App = (() => {
               <div class="card-title"><i class="fas fa-dollar-sign"></i> USD/BRL</div>
             </div>
             <div class="card-body">
-              <div class="chart-container"><canvas id="chartDolar"></canvas></div>
+              <div class="chart-container" id="chartDolarContainer"><canvas id="chartDolar"></canvas></div>
             </div>
           </div>
         </div>
 
-        <!-- Market Overview -->
         <div class="card section-gap">
           <div class="card-header">
             <div class="card-title"><i class="fas fa-th-list"></i> Visão de Mercado</div>
@@ -143,14 +135,13 @@ const App = (() => {
                   </tr>
                 </thead>
                 <tbody id="marketTableBody">
-                  <tr><td colspan="5" class="loading-inline"><div class="spinner-sm"></div><span>Carregando dados...</span></td></tr>
+                  <tr><td colspan="5" class="loading-inline"><div class="spinner-sm"></div><span>Carregando dados do mercado...</span></td></tr>
                 </tbody>
               </table>
             </div>
           </div>
         </div>
 
-        <!-- Strategies Grid -->
         <div class="card">
           <div class="card-header">
             <div class="card-title"><i class="fas fa-brain"></i> Estratégias Disponíveis</div>
@@ -165,13 +156,11 @@ const App = (() => {
       </div>
     `;
 
-    // Carrega dados
     loadDashboardData();
     loadIbovChart('6mo');
     loadDolarChart();
     loadStrategies();
 
-    // Event listener para período IBOV
     document.getElementById('ibovPeriod')?.addEventListener('change', (e) => {
       loadIbovChart(e.target.value);
     });
@@ -182,24 +171,21 @@ const App = (() => {
       const data = await API.getDashboardSummary();
       cachedDashboard = data;
 
-      // Stats cards
       const statsEl = document.getElementById('dashStats');
       if (statsEl && data.market_overview) {
         const totalAssets = data.total_b3_assets + data.total_bmf_assets;
         const positiveAssets = data.market_overview.filter(a => a.change_pct > 0).length;
-        const negativeAssets = data.market_overview.filter(a => a.change_pct < 0).length;
 
         statsEl.innerHTML = `
           ${renderStatCard('Ativos B3', data.total_b3_assets, 'fas fa-chart-bar', 'green', 'Ações mapeadas')}
           ${renderStatCard('Ativos BMF', data.total_bmf_assets, 'fas fa-exchange-alt', 'blue', 'Derivativos')}
           ${renderStatCard('Estratégias', data.total_strategies, 'fas fa-brain', 'yellow', 'Disponíveis')}
-          ${renderStatCard('Total Ativos', totalAssets, 'fas fa-database', 'green', `${positiveAssets} em alta`)}
+          ${renderStatCard('Total Ativos', totalAssets, 'fas fa-database', 'green', positiveAssets + ' em alta')}
         `;
       }
 
-      // Market table
       const tbody = document.getElementById('marketTableBody');
-      if (tbody && data.market_overview) {
+      if (tbody && data.market_overview && data.market_overview.length > 0) {
         tbody.innerHTML = data.market_overview.map(asset => `
           <tr>
             <td class="ticker-cell">${asset.ticker}</td>
@@ -208,13 +194,15 @@ const App = (() => {
             <td class="${Utils.getColorClass(asset.change_pct)}">
               <span class="badge ${Utils.getBadgeClass(asset.change_pct)}">${Utils.formatPercent(asset.change_pct)}</span>
             </td>
-            <td style="color: var(--text-secondary)">${Utils.formatVolume(asset.volume)}</td>
+            <td style="color: var(--text-secondary)">${Utils.formatVolume(asset.volume || 0)}</td>
           </tr>
         `).join('');
+      } else if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="fas fa-info-circle"></i><p>Dados de mercado indisponíveis no momento</p></div></td></tr>';
       }
     } catch (error) {
       console.error('Erro ao carregar dashboard:', error);
-      Utils.showToast('Erro ao carregar dados do dashboard. Verifique a conexão com a API.', 'error');
+      Utils.showToast('Erro ao carregar dados do dashboard. Verifique a API.', 'error');
 
       const statsEl = document.getElementById('dashStats');
       if (statsEl) {
@@ -231,18 +219,71 @@ const App = (() => {
   async function loadIbovChart(period) {
     try {
       const data = await API.getMarketData('IBOV', period, '1d');
-      Charts.priceLine('chartIbov', data.data, 'IBOVESPA');
+      if (data && data.data && data.data.length > 0) {
+        Charts.priceLine('chartIbov', data.data, 'IBOVESPA');
+      } else {
+        showChartFallback('chartIbovContainer', 'IBOVESPA indisponível');
+      }
     } catch (e) {
-      console.error('Erro gráfico IBOV:', e);
+      console.warn('Gráfico IBOV indisponível, tentando BOVA11...');
+      try {
+        const data = await API.getMarketData('BOVA11', period, '1d');
+        if (data && data.data && data.data.length > 0) {
+          Charts.priceLine('chartIbov', data.data, 'BOVA11 (ETF IBOV)');
+        } else {
+          showChartFallback('chartIbovContainer', 'IBOVESPA indisponível');
+        }
+      } catch (e2) {
+        console.warn('Gráfico IBOV fallback também falhou, tentando PETR4...');
+        try {
+          const data = await API.getMarketData('PETR4', period, '1d');
+          if (data && data.data && data.data.length > 0) {
+            Charts.priceLine('chartIbov', data.data, 'PETR4 (referência)');
+          } else {
+            showChartFallback('chartIbovContainer', 'Gráfico indisponível');
+          }
+        } catch (e3) {
+          showChartFallback('chartIbovContainer', 'Gráfico indisponível');
+        }
+      }
     }
   }
 
   async function loadDolarChart() {
     try {
       const data = await API.getMarketData('DOLAR', '6mo', '1d');
-      Charts.priceLine('chartDolar', data.data, 'USD/BRL');
+      if (data && data.data && data.data.length > 0) {
+        Charts.priceLine('chartDolar', data.data, 'USD/BRL');
+      } else {
+        showChartFallback('chartDolarContainer', 'USD/BRL indisponível');
+      }
     } catch (e) {
-      console.error('Erro gráfico Dólar:', e);
+      console.warn('Gráfico Dólar indisponível, tentando VALE3...');
+      try {
+        const data = await API.getMarketData('VALE3', '6mo', '1d');
+        if (data && data.data && data.data.length > 0) {
+          Charts.priceLine('chartDolar', data.data, 'VALE3 (referência)');
+        } else {
+          showChartFallback('chartDolarContainer', 'Gráfico indisponível');
+        }
+      } catch (e2) {
+        showChartFallback('chartDolarContainer', 'Gráfico indisponível');
+      }
+    }
+  }
+
+  function showChartFallback(containerId, message) {
+    const container = document.getElementById(containerId);
+    if (container) {
+      container.innerHTML = `
+        <div class="empty-state" style="height:100%;display:flex;align-items:center;justify-content:center">
+          <div style="text-align:center">
+            <i class="fas fa-chart-line" style="font-size:36px;opacity:0.2;margin-bottom:12px;display:block"></i>
+            <p style="font-size:13px;color:var(--text-muted)">${message}</p>
+            <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Tente atualizar em alguns minutos</p>
+          </div>
+        </div>
+      `;
     }
   }
 
@@ -268,24 +309,27 @@ const App = (() => {
       }
     } catch (e) {
       console.error('Erro ao carregar estratégias:', e);
+      const grid = document.getElementById('strategyGrid');
+      if (grid) {
+        grid.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Erro ao carregar estratégias</p></div>';
+      }
     }
   }
 
   // ============================================================
-  // BACKTEST PAGE (B3 Daily / B3 Intraday / BMF Intraday)
+  // BACKTEST PAGE
   // ============================================================
   async function renderBacktestPage(container, market, interval, pageLabel) {
-    // Carrega estratégias se não tiver
     if (cachedStrategies.length === 0) {
       try {
         const data = await API.getStrategies();
         cachedStrategies = data.strategies || [];
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) { console.error(e); }
     }
 
-    const stratOptions = cachedStrategies.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    const stratOptions = cachedStrategies.map(s =>
+      `<option value="${s.id}">${s.name}</option>`
+    ).join('');
 
     const periodOptions = interval === '1d'
       ? `<option value="3mo">3 Meses</option><option value="6mo">6 Meses</option><option value="1y" selected>1 Ano</option><option value="2y">2 Anos</option>`
@@ -293,13 +337,13 @@ const App = (() => {
 
     container.innerHTML = `
       <div class="fade-in">
-        <!-- Filtros -->
+
         <div class="card section-gap">
           <div class="card-header">
-            <div class="card-title"><i class="fas fa-filter"></i> Filtros do Back-test</div>
+            <div class="card-title"><i class="fas fa-sliders-h"></i> Configurações do Back-test</div>
           </div>
           <div class="card-body">
-            <div class="filter-bar">
+            <div class="filter-bar" style="margin-bottom:var(--space-md)">
               <div class="form-group">
                 <label class="form-label">Estratégia</label>
                 <select class="form-select" id="btStrategy" style="min-width:220px">
@@ -314,7 +358,7 @@ const App = (() => {
               </div>
               <div class="form-group">
                 <label class="form-label">Capital Inicial</label>
-                <select class="form-select" id="btCapital" style="min-width:140px">
+                <select class="form-select" id="btCapital" style="min-width:150px">
                   <option value="5000">R$ 5.000</option>
                   <option value="10000" selected>R$ 10.000</option>
                   <option value="25000">R$ 25.000</option>
@@ -322,33 +366,77 @@ const App = (() => {
                   <option value="100000">R$ 100.000</option>
                 </select>
               </div>
-              <div class="form-group">
-                <label class="form-label">&nbsp;</label>
-                <button class="btn btn-primary" id="btnRunBulk" onclick="App.runBulkBacktest('${market}', '${interval}')">
-                  <i class="fas fa-play"></i> Executar Back-test
-                </button>
+            </div>
+
+            <div class="tab-nav" id="btModeTabs">
+              <button class="tab-btn active" data-tab="bulk" onclick="App._switchBtTab('bulk')">
+                <i class="fas fa-layer-group"></i> Todos os Ativos
+              </button>
+              <button class="tab-btn" data-tab="single" onclick="App._switchBtTab('single')">
+                <i class="fas fa-crosshairs"></i> Ativo Individual
+              </button>
+              <button class="tab-btn" data-tab="compare" onclick="App._switchBtTab('compare')">
+                <i class="fas fa-columns"></i> Comparar Estratégias
+              </button>
+            </div>
+
+            <div class="bt-tab-content" id="btTabBulk" style="padding-top:var(--space-md)">
+              <button class="btn btn-primary btn-lg" id="btnRunBulk" onclick="App.runBulkBacktest('${market}', '${interval}')">
+                <i class="fas fa-play"></i> Executar em Todos os Ativos
+              </button>
+            </div>
+
+            <div class="bt-tab-content" id="btTabSingle" style="display:none;padding-top:var(--space-md)">
+              <div class="filter-bar">
+                <div class="form-group">
+                  <label class="form-label">Ticker</label>
+                  <input type="text" class="form-input" id="btSingleTicker" placeholder="Ex: PETR4" style="min-width:140px;text-transform:uppercase">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">&nbsp;</label>
+                  <button class="btn btn-primary" onclick="App.runSingleBacktest('${market}', '${interval}')">
+                    <i class="fas fa-search"></i> Analisar Ativo
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="bt-tab-content" id="btTabCompare" style="display:none;padding-top:var(--space-md)">
+              <div class="filter-bar">
+                <div class="form-group">
+                  <label class="form-label">Ticker para Comparação</label>
+                  <input type="text" class="form-input" id="btCompareTicker" placeholder="Ex: VALE3" style="min-width:140px;text-transform:uppercase">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">&nbsp;</label>
+                  <button class="btn btn-primary" onclick="App.compareStrategies()">
+                    <i class="fas fa-balance-scale"></i> Comparar Estratégias
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Resultados -->
         <div class="stats-grid" id="btStats">
           ${renderStatCardSkeleton(4)}
         </div>
 
-        <!-- Gráfico de Performance -->
         <div class="card section-gap">
           <div class="card-header">
             <div class="card-title"><i class="fas fa-chart-bar"></i> Ranking de Performance</div>
-            <span class="badge badge-green" id="btResultCount">-</span>
+            <div class="card-actions">
+              <span class="badge badge-green" id="btResultCount">-</span>
+              <button class="btn btn-sm btn-ghost" onclick="App.exportTableCSV('btResultTable', 'backtest_${market}')">
+                <i class="fas fa-download"></i> CSV
+              </button>
+            </div>
           </div>
           <div class="card-body">
             <div class="chart-container" style="height:400px"><canvas id="chartPerformance"></canvas></div>
           </div>
         </div>
 
-        <!-- Tabela de Resultados -->
         <div class="card section-gap">
           <div class="card-header">
             <div class="card-title"><i class="fas fa-table"></i> Resultados Detalhados</div>
@@ -357,7 +445,7 @@ const App = (() => {
             </div>
           </div>
           <div class="card-body no-padding">
-            <div class="table-container">
+            <div class="table-container" style="max-height:500px;overflow-y:auto">
               <table class="data-table" id="btResultTable">
                 <thead>
                   <tr>
@@ -371,23 +459,22 @@ const App = (() => {
                     <th data-sort="buy_hold_return_pct">Buy&Hold %</th>
                     <th data-sort="best_trade">Melhor Op.</th>
                     <th data-sort="worst_trade">Pior Op.</th>
-                    <th>Ações</th>
+                    <th>Detalhe</th>
                   </tr>
                 </thead>
                 <tbody id="btResultBody">
-                  <tr><td colspan="11"><div class="empty-state"><i class="fas fa-rocket"></i><p>Selecione uma estratégia e clique em "Executar Back-test"</p></div></td></tr>
+                  <tr><td colspan="11"><div class="empty-state"><i class="fas fa-rocket"></i><p>Selecione uma estratégia e clique em "Executar" para iniciar</p></div></td></tr>
                 </tbody>
               </table>
             </div>
           </div>
         </div>
 
-        <!-- Detalhe Individual -->
         <div id="btDetailSection" style="display:none">
           <div class="grid-2 section-gap">
             <div class="card">
               <div class="card-header">
-                <div class="card-title"><i class="fas fa-chart-area"></i> Curva de Equity — <span id="detailTicker">-</span></div>
+                <div class="card-title"><i class="fas fa-chart-area"></i> Curva de Equity — <span id="detailTicker" style="color:var(--green-primary)">-</span></div>
               </div>
               <div class="card-body">
                 <div class="chart-container"><canvas id="chartEquity"></canvas></div>
@@ -398,7 +485,7 @@ const App = (() => {
                 <div class="card-title"><i class="fas fa-bullseye"></i> Win Rate</div>
               </div>
               <div class="card-body">
-                <div class="chart-container" style="height:250px"><canvas id="chartWinRate"></canvas></div>
+                <div class="chart-container" style="height:260px"><canvas id="chartWinRate"></canvas></div>
               </div>
             </div>
           </div>
@@ -406,37 +493,75 @@ const App = (() => {
           <div class="grid-2 section-gap">
             <div class="card">
               <div class="card-header">
-                <div class="card-title"><i class="fas fa-list-ol"></i> Métricas Detalhadas</div>
+                <div class="card-title"><i class="fas fa-list-ol"></i> Métricas Completas</div>
               </div>
-              <div class="card-body" id="detailMetrics"></div>
+              <div class="card-body" id="detailMetrics" style="max-height:450px;overflow-y:auto"></div>
             </div>
             <div class="card">
               <div class="card-header">
-                <div class="card-title"><i class="fas fa-history"></i> Últimas Operações</div>
+                <div class="card-title"><i class="fas fa-history"></i> Histórico de Operações</div>
               </div>
               <div class="card-body no-padding">
-                <div class="trade-list" id="detailTrades"></div>
+                <div class="trade-list" id="detailTrades" style="max-height:450px;overflow-y:auto"></div>
               </div>
             </div>
           </div>
 
           <div class="card section-gap">
             <div class="card-header">
-              <div class="card-title"><i class="fas fa-dot-circle"></i> Distribuição de Trades</div>
+              <div class="card-title"><i class="fas fa-dot-circle"></i> Distribuição de P&L por Trade</div>
             </div>
             <div class="card-body">
               <div class="chart-container"><canvas id="chartTrades"></canvas></div>
             </div>
           </div>
         </div>
+
+        <div id="btCompareSection" style="display:none">
+          <div class="card section-gap">
+            <div class="card-header">
+              <div class="card-title"><i class="fas fa-balance-scale"></i> Comparação de Estratégias</div>
+            </div>
+            <div class="card-body">
+              <div class="chart-container" style="height:380px"><canvas id="chartCompare"></canvas></div>
+            </div>
+          </div>
+          <div class="card section-gap">
+            <div class="card-header">
+              <div class="card-title"><i class="fas fa-sort-amount-down"></i> Ranking de Estratégias</div>
+            </div>
+            <div class="card-body no-padding">
+              <div class="table-container">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Estratégia</th>
+                      <th>Retorno %</th>
+                      <th>Win Rate</th>
+                      <th>Profit Factor</th>
+                      <th>Max DD %</th>
+                      <th>Sharpe</th>
+                      <th>Trades</th>
+                    </tr>
+                  </thead>
+                  <tbody id="compareTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     `;
 
-    // Setup filtro da tabela
     setupTableFilter('btFilterInput', 'btResultBody');
     setupTableSort('btResultTable');
   }
 
+  // ============================================================
+  // BULK BACKTEST
+  // ============================================================
   async function runBulkBacktest(market, interval) {
     const strategy = document.getElementById('btStrategy')?.value;
     const period = document.getElementById('btPeriod')?.value;
@@ -448,7 +573,6 @@ const App = (() => {
       return;
     }
 
-    // Loading state
     if (btn) {
       btn.disabled = true;
       btn.innerHTML = '<div class="spinner-sm"></div> Processando...';
@@ -464,8 +588,7 @@ const App = (() => {
       });
 
       Utils.showLoading(false);
-      Utils.showToast(`Back-test concluído! ${data.total_assets} ativos analisados em ${data.execution_time}s`, 'success');
-
+      Utils.showToast(`Back-test concluído! ${data.total_assets} ativos em ${data.execution_time}s`, 'success');
       renderBulkResults(data);
     } catch (error) {
       Utils.showLoading(false);
@@ -473,7 +596,7 @@ const App = (() => {
     } finally {
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-play"></i> Executar Back-test';
+        btn.innerHTML = '<i class="fas fa-play"></i> Executar em Todos os Ativos';
       }
     }
   }
@@ -481,7 +604,6 @@ const App = (() => {
   function renderBulkResults(data) {
     const results = data.results || [];
 
-    // Stats
     const statsEl = document.getElementById('btStats');
     if (statsEl && results.length > 0) {
       const avgReturn = results.reduce((s, r) => s + r.total_return_pct, 0) / results.length;
@@ -490,19 +612,17 @@ const App = (() => {
       const totalTrades = results.reduce((s, r) => s + r.total_trades, 0);
 
       statsEl.innerHTML = `
-        ${renderStatCard('Retorno Médio', Utils.formatPercent(avgReturn), 'fas fa-percentage', avgReturn >= 0 ? 'green' : 'red', `${results.length} ativos`)}
-        ${renderStatCard('Win Rate Médio', `${avgWinRate.toFixed(1)}%`, 'fas fa-bullseye', 'blue', 'Média geral')}
-        ${renderStatCard('Ativos Lucrativos', `${profitable}/${results.length}`, 'fas fa-trophy', 'green', `${((profitable / results.length) * 100).toFixed(0)}% positivos`)}
-        ${renderStatCard('Total de Trades', totalTrades, 'fas fa-retweet', 'yellow', `${data.execution_time}s de execução`)}
+        ${renderStatCard('Retorno Médio', Utils.formatPercent(avgReturn), 'fas fa-percentage', avgReturn >= 0 ? 'green' : 'red', results.length + ' ativos')}
+        ${renderStatCard('Win Rate Médio', avgWinRate.toFixed(1) + '%', 'fas fa-bullseye', 'blue', 'Média geral')}
+        ${renderStatCard('Ativos Lucrativos', profitable + '/' + results.length, 'fas fa-trophy', 'green', ((profitable / results.length) * 100).toFixed(0) + '% positivos')}
+        ${renderStatCard('Total de Trades', totalTrades, 'fas fa-retweet', 'yellow', data.execution_time + 's execução')}
       `;
     }
 
-    // Gráfico
     const countEl = document.getElementById('btResultCount');
-    if (countEl) countEl.textContent = `${results.length} ativos`;
+    if (countEl) countEl.textContent = results.length + ' ativos';
     Charts.performanceBar('chartPerformance', results);
 
-    // Tabela
     const tbody = document.getElementById('btResultBody');
     if (tbody) {
       tbody.innerHTML = results.map(r => `
@@ -523,6 +643,9 @@ const App = (() => {
     }
   }
 
+  // ============================================================
+  // VIEW DETAIL
+  // ============================================================
   async function viewDetail(ticker) {
     const strategy = document.getElementById('btStrategy')?.value;
     const period = document.getElementById('btPeriod')?.value;
@@ -546,61 +669,27 @@ const App = (() => {
         section.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
 
-      // Ticker label
       const tickerEl = document.getElementById('detailTicker');
       if (tickerEl) tickerEl.textContent = ticker;
 
-      // Equity curve
       if (data.equity_curve) {
         Charts.equityCurve('chartEquity', data.equity_curve, data.config.initial_capital);
       }
 
-      // Win rate donut
       Charts.winRateDonut('chartWinRate', data.metrics.winning_trades, data.metrics.losing_trades);
 
-      // Trades scatter
       if (data.trades) {
         Charts.tradesScatter('chartTrades', data.trades);
       }
 
-      // Metrics
       const metricsEl = document.getElementById('detailMetrics');
       if (metricsEl) {
-        const m = data.metrics;
-        metricsEl.innerHTML = `
-          <div class="metric-row"><span class="metric-label">Retorno Total</span><span class="metric-value ${Utils.getColorClass(m.total_return_pct)}">${Utils.formatPercent(m.total_return_pct)}</span></div>
-          <div class="metric-row"><span class="metric-label">Equity Final</span><span class="metric-value">${Utils.formatCurrency(m.final_equity)}</span></div>
-          <div class="metric-row"><span class="metric-label">Total de Trades</span><span class="metric-value">${m.total_trades}</span></div>
-          <div class="metric-row"><span class="metric-label">Win Rate</span><span class="metric-value">${m.win_rate}%</span></div>
-          <div class="metric-row"><span class="metric-label">Profit Factor</span><span class="metric-value ${m.profit_factor >= 1 ? 'positive' : 'negative'}">${m.profit_factor}</span></div>
-          <div class="metric-row"><span class="metric-label">Max Drawdown</span><span class="metric-value negative">-${m.max_drawdown_pct}%</span></div>
-          <div class="metric-row"><span class="metric-label">Sharpe Ratio</span><span class="metric-value">${m.sharpe_ratio}</span></div>
-          <div class="metric-row"><span class="metric-label">Sortino Ratio</span><span class="metric-value">${m.sortino_ratio}</span></div>
-          <div class="metric-row"><span class="metric-label">Expectancy</span><span class="metric-value">${Utils.formatCurrency(m.expectancy)}</span></div>
-          <div class="metric-row"><span class="metric-label">Melhor Trade</span><span class="metric-value positive">${Utils.formatCurrency(m.best_trade)}</span></div>
-          <div class="metric-row"><span class="metric-label">Pior Trade</span><span class="metric-value negative">${Utils.formatCurrency(m.worst_trade)}</span></div>
-          <div class="metric-row"><span class="metric-label">Vitórias Consecutivas</span><span class="metric-value">${m.max_consecutive_wins}</span></div>
-          <div class="metric-row"><span class="metric-label">Derrotas Consecutivas</span><span class="metric-value">${m.max_consecutive_losses}</span></div>
-          <div class="metric-row"><span class="metric-label">Buy & Hold</span><span class="metric-value ${Utils.getColorClass(m.buy_hold_return_pct)}">${Utils.formatPercent(m.buy_hold_return_pct)}</span></div>
-        `;
+        metricsEl.innerHTML = buildMetricsHTML(data.metrics);
       }
 
-      // Trades list
       const tradesEl = document.getElementById('detailTrades');
       if (tradesEl && data.trades) {
-        tradesEl.innerHTML = data.trades.slice().reverse().map(t => `
-          <div class="trade-row">
-            <div class="trade-info">
-              <span class="trade-type ${t.type.toLowerCase()}">${t.type}</span>
-              <span style="color:var(--text-secondary)">${Utils.formatDate(t.entry_date)} → ${Utils.formatDate(t.exit_date)}</span>
-            </div>
-            <div>
-              <span style="color:var(--text-muted);margin-right:8px">R$${t.entry_price} → R$${t.exit_price}</span>
-              <strong class="${Utils.getColorClass(t.pnl)}">${Utils.formatCurrency(t.pnl)}</strong>
-              <span class="badge ${Utils.getBadgeClass(t.pnl_pct)}" style="margin-left:8px">${Utils.formatPercent(t.pnl_pct)}</span>
-            </div>
-          </div>
-        `).join('');
+        tradesEl.innerHTML = buildTradesHTML(data.trades);
       }
 
     } catch (error) {
@@ -610,7 +699,243 @@ const App = (() => {
   }
 
   // ============================================================
-  // HELPERS
+  // SINGLE BACKTEST
+  // ============================================================
+  async function runSingleBacktest(market, interval) {
+    const strategy = document.getElementById('btStrategy')?.value;
+    const period = document.getElementById('btPeriod')?.value;
+    const capital = document.getElementById('btCapital')?.value;
+    const ticker = document.getElementById('btSingleTicker')?.value?.toUpperCase();
+
+    if (!strategy) {
+      Utils.showToast('Selecione uma estratégia', 'warning');
+      return;
+    }
+    if (!ticker) {
+      Utils.showToast('Digite um ticker válido', 'warning');
+      return;
+    }
+
+    Utils.showLoading(true);
+
+    try {
+      const data = await API.runBacktest(ticker, strategy, {
+        period,
+        interval,
+        capital: parseFloat(capital),
+      });
+
+      Utils.showLoading(false);
+      Utils.showToast(`Back-test de ${ticker} concluído!`, 'success');
+
+      const section = document.getElementById('btDetailSection');
+      if (section) {
+        section.style.display = 'block';
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      const tickerEl = document.getElementById('detailTicker');
+      if (tickerEl) tickerEl.textContent = ticker;
+
+      if (data.equity_curve) {
+        Charts.equityCurve('chartEquity', data.equity_curve, data.config.initial_capital);
+      }
+
+      Charts.winRateDonut('chartWinRate', data.metrics.winning_trades, data.metrics.losing_trades);
+
+      if (data.trades) {
+        Charts.tradesScatter('chartTrades', data.trades);
+      }
+
+      const metricsEl = document.getElementById('detailMetrics');
+      if (metricsEl) {
+        metricsEl.innerHTML = buildMetricsHTML(data.metrics);
+      }
+
+      const tradesEl = document.getElementById('detailTrades');
+      if (tradesEl && data.trades) {
+        tradesEl.innerHTML = buildTradesHTML(data.trades);
+      }
+    } catch (error) {
+      Utils.showLoading(false);
+      Utils.showToast(`Erro: ${error.message}`, 'error');
+    }
+  }
+
+  // ============================================================
+  // COMPARE STRATEGIES
+  // ============================================================
+  async function compareStrategies() {
+    const ticker = document.getElementById('btCompareTicker')?.value?.toUpperCase();
+    if (!ticker) {
+      Utils.showToast('Digite um ticker para comparar', 'warning');
+      return;
+    }
+
+    const period = document.getElementById('btPeriod')?.value || '1y';
+    const capital = document.getElementById('btCapital')?.value || 10000;
+    const interval = currentPage === 'b3-daily' ? '1d' : '1h';
+
+    Utils.showLoading(true);
+
+    const results = [];
+    const strategiesToTest = cachedStrategies.slice(0, 8);
+
+    for (const strat of strategiesToTest) {
+      try {
+        const data = await API.runBacktest(ticker, strat.id, {
+          period, interval, capital: parseFloat(capital),
+        });
+        if (data && data.metrics) {
+          results.push({
+            strategy: strat.name,
+            strategyId: strat.id,
+            return_pct: data.metrics.total_return_pct,
+            win_rate: data.metrics.win_rate,
+            profit_factor: data.metrics.profit_factor,
+            max_dd: data.metrics.max_drawdown_pct,
+            sharpe: data.metrics.sharpe_ratio,
+            trades: data.metrics.total_trades,
+            equity_curve: data.equity_curve,
+          });
+        }
+      } catch (e) {
+        console.warn(`Erro ${strat.id} para ${ticker}:`, e.message);
+      }
+    }
+
+    Utils.showLoading(false);
+
+    if (results.length === 0) {
+      Utils.showToast('Nenhum resultado para comparar', 'warning');
+      return;
+    }
+
+    Utils.showToast(`Comparação: ${results.length} estratégias em ${ticker}`, 'success');
+
+    const section = document.getElementById('btCompareSection');
+    if (section) {
+      section.style.display = 'block';
+      section.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    const tbody = document.getElementById('compareTableBody');
+    if (tbody) {
+      const sorted = [...results].sort((a, b) => b.return_pct - a.return_pct);
+      tbody.innerHTML = sorted.map((r, i) => `
+        <tr>
+          <td style="color:var(--yellow-primary);font-weight:700">#${i + 1}</td>
+          <td style="font-family:var(--font-main);font-weight:600">${r.strategy}</td>
+          <td class="${Utils.getColorClass(r.return_pct)}"><strong>${Utils.formatPercent(r.return_pct)}</strong></td>
+          <td><span class="badge ${r.win_rate >= 50 ? 'badge-green' : 'badge-red'}">${r.win_rate.toFixed(1)}%</span></td>
+          <td class="${r.profit_factor >= 1 ? 'positive' : 'negative'}">${r.profit_factor.toFixed(2)}</td>
+          <td class="negative">-${r.max_dd.toFixed(2)}%</td>
+          <td class="${r.sharpe >= 0 ? 'positive' : 'negative'}">${r.sharpe.toFixed(2)}</td>
+          <td>${r.trades}</td>
+        </tr>
+      `).join('');
+    }
+
+    const datasets = results
+      .filter(r => r.equity_curve && r.equity_curve.length > 0)
+      .slice(0, 5)
+      .map(r => ({
+        label: r.strategy,
+        data: r.equity_curve.map(d => d.equity),
+        labels: r.equity_curve.map(d => {
+          const dt = new Date(d.date);
+          return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        }),
+      }));
+
+    if (datasets.length > 0) {
+      Charts.multiLine('chartCompare', datasets);
+    }
+  }
+
+  // ============================================================
+  // HELPERS - BUILD HTML
+  // ============================================================
+  function buildMetricsHTML(m) {
+    const rows = [
+      ['Retorno Total', Utils.formatPercent(m.total_return_pct), Utils.getColorClass(m.total_return_pct)],
+      ['Equity Final', Utils.formatCurrency(m.final_equity), ''],
+      ['Total de Trades', m.total_trades, ''],
+      ['Trades Vencedores', m.winning_trades, 'positive'],
+      ['Trades Perdedores', m.losing_trades, 'negative'],
+      ['Win Rate', m.win_rate + '%', m.win_rate >= 50 ? 'positive' : 'negative'],
+      ['Lucro Médio', Utils.formatCurrency(m.avg_profit), 'positive'],
+      ['Prejuízo Médio', Utils.formatCurrency(m.avg_loss), 'negative'],
+      ['Profit Factor', m.profit_factor, m.profit_factor >= 1 ? 'positive' : 'negative'],
+      ['Max Drawdown', '-' + m.max_drawdown_pct + '%', 'negative'],
+      ['Sharpe Ratio', m.sharpe_ratio, m.sharpe_ratio >= 0 ? 'positive' : 'negative'],
+      ['Sortino Ratio', m.sortino_ratio, m.sortino_ratio >= 0 ? 'positive' : 'negative'],
+      ['Expectancy', Utils.formatCurrency(m.expectancy), Utils.getColorClass(m.expectancy)],
+      ['Melhor Trade', Utils.formatCurrency(m.best_trade), 'positive'],
+      ['Pior Trade', Utils.formatCurrency(m.worst_trade), 'negative'],
+      ['P&L Médio/Trade', Utils.formatCurrency(m.avg_trade_pnl), Utils.getColorClass(m.avg_trade_pnl)],
+      ['Vitórias Consecutivas', m.max_consecutive_wins, 'positive'],
+      ['Derrotas Consecutivas', m.max_consecutive_losses, 'negative'],
+      ['Buy & Hold', Utils.formatPercent(m.buy_hold_return_pct), Utils.getColorClass(m.buy_hold_return_pct)],
+    ];
+
+    return rows.map(([label, value, cls]) =>
+      `<div class="metric-row">
+        <span class="metric-label">${label}</span>
+        <span class="metric-value ${cls}">${value}</span>
+      </div>`
+    ).join('');
+  }
+
+  function buildTradesHTML(trades) {
+    return trades.slice().reverse().map(t => `
+      <div class="trade-row">
+        <div class="trade-info">
+          <span class="trade-type ${t.type.toLowerCase()}">${t.type}</span>
+          <span style="color:var(--text-muted);font-size:11px">${Utils.formatDate(t.entry_date)} → ${Utils.formatDate(t.exit_date)}</span>
+          <span class="badge ${t.exit_reason === 'STOP_LOSS' ? 'badge-red' : t.exit_reason === 'TAKE_PROFIT' ? 'badge-green' : 'badge-blue'}" style="font-size:9px">${t.exit_reason}</span>
+        </div>
+        <div>
+          <span style="color:var(--text-muted);margin-right:8px;font-size:11px">R$${t.entry_price} → R$${t.exit_price}</span>
+          <strong class="${Utils.getColorClass(t.pnl)}" style="font-family:var(--font-mono)">${Utils.formatCurrency(t.pnl)}</strong>
+          <span class="badge ${Utils.getBadgeClass(t.pnl_pct)}" style="margin-left:6px">${Utils.formatPercent(t.pnl_pct)}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // ============================================================
+  // EXPORT CSV
+  // ============================================================
+  function exportTableCSV(tableId, filename) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+
+    const rows = table.querySelectorAll('tr');
+    let csv = '';
+
+    rows.forEach(row => {
+      const cells = row.querySelectorAll('th, td');
+      const rowData = [];
+      cells.forEach(cell => {
+        let text = cell.textContent.trim().replace(/"/g, '""');
+        rowData.push('"' + text + '"');
+      });
+      csv += rowData.join(',') + '\n';
+    });
+
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename + '_' + new Date().toISOString().slice(0, 10) + '.csv';
+    link.click();
+    URL.revokeObjectURL(link.href);
+
+    Utils.showToast('Arquivo ' + link.download + ' exportado!', 'success');
+  }
+
+  // ============================================================
+  // HELPERS - GENERAL
   // ============================================================
   function renderStatCard(label, value, icon, color, subtitle) {
     return `
@@ -628,11 +953,7 @@ const App = (() => {
   function renderStatCardSkeleton(count) {
     let html = '';
     for (let i = 0; i < count; i++) {
-      html += `
-        <div class="stat-card" style="min-height:120px">
-          <div class="loading-inline"><div class="spinner-sm"></div></div>
-        </div>
-      `;
+      html += '<div class="stat-card" style="min-height:120px"><div class="loading-inline"><div class="spinner-sm"></div></div></div>';
     }
     return html;
   }
@@ -644,8 +965,7 @@ const App = (() => {
       const filter = e.target.value.toUpperCase();
       const tbody = document.getElementById(tbodyId);
       if (!tbody) return;
-      const rows = tbody.querySelectorAll('tr');
-      rows.forEach(row => {
+      tbody.querySelectorAll('tr').forEach(row => {
         const ticker = row.querySelector('.ticker-cell');
         if (ticker) {
           row.style.display = ticker.textContent.toUpperCase().includes(filter) ? '' : 'none';
@@ -663,17 +983,17 @@ const App = (() => {
         const isDesc = th.classList.contains('sorted-desc');
         table.querySelectorAll('th').forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
         th.classList.add(isDesc ? 'sorted-asc' : 'sorted-desc');
-        const direction = isDesc ? 'asc' : 'desc';
-        sortTableByColumn(tableId, key, direction);
+        sortTableByColumn(tableId, key, isDesc ? 'asc' : 'desc');
       });
     });
   }
 
   function sortTableByColumn(tableId, key, direction) {
-    const tbody = document.querySelector(`#${tableId} tbody`);
+    const tbody = document.querySelector('#' + tableId + ' tbody');
     if (!tbody) return;
     const rows = Array.from(tbody.querySelectorAll('tr'));
-    const colIndex = Array.from(document.querySelectorAll(`#${tableId} th`)).findIndex(th => th.getAttribute('data-sort') === key);
+    const headers = Array.from(document.querySelectorAll('#' + tableId + ' th'));
+    const colIndex = headers.findIndex(th => th.getAttribute('data-sort') === key);
     if (colIndex === -1) return;
 
     rows.sort((a, b) => {
@@ -685,6 +1005,20 @@ const App = (() => {
     });
 
     rows.forEach(row => tbody.appendChild(row));
+  }
+
+  // ============================================================
+  // TAB SWITCH
+  // ============================================================
+  function _switchBtTab(tab) {
+    document.querySelectorAll('.bt-tab-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('#btModeTabs .tab-btn').forEach(el => el.classList.remove('active'));
+
+    const tabEl = document.getElementById('btTab' + tab.charAt(0).toUpperCase() + tab.slice(1));
+    const btnEl = document.querySelector('#btModeTabs .tab-btn[data-tab="' + tab + '"]');
+
+    if (tabEl) tabEl.style.display = 'block';
+    if (btnEl) btnEl.classList.add('active');
   }
 
   // ============================================================
@@ -711,12 +1045,8 @@ const App = (() => {
     const dot = document.getElementById('marketStatusDot');
     const text = document.getElementById('marketStatusText');
     const open = Utils.isMarketOpen();
-    if (dot) {
-      dot.className = open ? 'status-dot' : 'status-dot closed';
-    }
-    if (text) {
-      text.textContent = open ? 'Mercado Aberto' : 'Mercado Fechado';
-    }
+    if (dot) dot.className = open ? 'status-dot' : 'status-dot closed';
+    if (text) text.textContent = open ? 'Mercado Aberto' : 'Mercado Fechado';
   }
 
   function refreshDashboard() {
@@ -726,14 +1056,20 @@ const App = (() => {
     Utils.showToast('Dashboard atualizado!', 'success');
   }
 
+  // ============================================================
+  // PUBLIC API
+  // ============================================================
   return {
     init,
     navigateTo,
     runBulkBacktest,
+    runSingleBacktest,
     viewDetail,
     refreshDashboard,
+    exportTableCSV,
+    compareStrategies,
+    _switchBtTab,
   };
 })();
 
-// Inicializa quando o DOM estiver pronto
 document.addEventListener('DOMContentLoaded', App.init);
