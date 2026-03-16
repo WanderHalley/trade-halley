@@ -1,11 +1,9 @@
 /**
- * Trade Halley - API Client v2.0
- * Comunicação com o backend FastAPI
+ * Trade Halley - API Client v3.0
+ * Alinhado com backend FastAPI v2.0 (OpenAPI spec)
  */
 const API = (() => {
-    // ===== ALTERE PARA SUA URL DO HUGGING FACE SPACE =====
     const BASE_URL = 'https://wanderhalleylee-trade-halley.hf.space';
-
     let _cachedStrategies = null;
 
     async function request(endpoint, options = {}) {
@@ -32,68 +30,110 @@ const API = (() => {
     return {
         getBaseUrl: () => BASE_URL,
 
-        // Status
+        // Health
         health: () => request('/health'),
         root: () => request('/'),
 
-        // Assets
+        // Assets (hard-coded maps)
         getAssets: (market = 'all') => request(`/assets?market=${market}`),
-        getAssetInfo: (ticker) => request(`/asset/${ticker}`),
+        getAssetInfo: (ticker) => request(`/asset/${encodeURIComponent(ticker)}`),
 
         // Market Data
-        getMarketData: (ticker, period = '6mo', interval = '1d', source = 'auto') =>
-            request(`/market-data/${ticker}?period=${period}&interval=${interval}&source=${source}`),
+        getMarketData: (ticker, period = '6mo', interval = '1d') =>
+            request(`/market-data/${encodeURIComponent(ticker)}?period=${period}&interval=${interval}`),
 
-        // Strategies
+        // Strategies (from strategies.py)
         getStrategies: async () => {
             if (_cachedStrategies) return _cachedStrategies;
             _cachedStrategies = await request('/strategies');
             return _cachedStrategies;
         },
+        clearStrategyCache: () => { _cachedStrategies = null; },
 
         // Backtest
-        runBacktest: (ticker, strategy, period = '1y', interval = '1d', capital = 10000) =>
-            request(`/backtest?ticker=${ticker}&strategy=${strategy}&period=${period}&interval=${interval}&capital=${capital}`),
+        runBacktest: (ticker, strategy, period = '1y', interval = '1d', capital = 10000, stopLoss = null, takeProfit = null) => {
+            let url = `/backtest?ticker=${encodeURIComponent(ticker)}&strategy=${encodeURIComponent(strategy)}&period=${period}&interval=${interval}&capital=${capital}`;
+            if (stopLoss !== null) url += `&stop_loss=${stopLoss}`;
+            if (takeProfit !== null) url += `&take_profit=${takeProfit}`;
+            return request(url);
+        },
 
         runBulkBacktest: (market, strategy, period = '1y', interval = '1d', capital = 10000) =>
-            request(`/backtest/bulk?market=${market}&strategy=${strategy}&period=${period}&interval=${interval}&capital=${capital}`),
+            request(`/backtest/bulk?market=${encodeURIComponent(market)}&strategy=${encodeURIComponent(strategy)}&period=${period}&interval=${interval}&capital=${capital}`),
 
         compareStrategies: (ticker, period = '1y', interval = '1d', capital = 10000) =>
-            request(`/backtest/compare?ticker=${ticker}&period=${period}&interval=${interval}&capital=${capital}`),
+            request(`/backtest/compare?ticker=${encodeURIComponent(ticker)}&period=${period}&interval=${interval}&capital=${capital}`),
 
         // Dashboard
         getDashboardSummary: () => request('/dashboard/summary'),
 
-        // ===== CONFIG (protegido por PIN) =====
-        verifyPin: (pin) => request(`/config/verify-pin?pin=${encodeURIComponent(pin)}`),
+        // ===== CONFIG (PIN-protected) =====
+        // POST /config/verify-pin  body: { pin }
+        verifyPin: (pin) =>
+            request('/config/verify-pin', {
+                method: 'POST',
+                body: JSON.stringify({ pin }),
+            }),
 
+        // POST /config/change-pin  body: { old_pin, new_pin }
         changePin: (oldPin, newPin) =>
-            request(`/config/change-pin?old_pin=${encodeURIComponent(oldPin)}&new_pin=${encodeURIComponent(newPin)}`, { method: 'POST' }),
+            request('/config/change-pin', {
+                method: 'POST',
+                body: JSON.stringify({ old_pin: oldPin, new_pin: newPin }),
+            }),
 
-        getStorageInfo: (pin) =>
-            request(`/config/storage?pin=${encodeURIComponent(pin)}`),
+        // GET /storage/stats (no PIN needed)
+        getStorageStats: () => request('/storage/stats'),
 
-        validateTicker: (ticker, pin) =>
-            request(`/config/validate-ticker?ticker=${encodeURIComponent(ticker)}&pin=${encodeURIComponent(pin)}`),
+        // GET /config/validate-ticker/{ticker}  (path param, no PIN)
+        validateTicker: (ticker) =>
+            request(`/config/validate-ticker/${encodeURIComponent(ticker)}`),
 
-        downloadData: (ticker, startDate, endDate, timeframe, pin) =>
-            request(`/config/download?ticker=${encodeURIComponent(ticker)}&start_date=${startDate}&end_date=${endDate}&timeframe=${timeframe}&pin=${encodeURIComponent(pin)}`, { method: 'POST' }),
+        // POST /config/download-data  body: { pin, ticker, start_date, end_date, timeframe }
+        downloadData: (pin, ticker, startDate, endDate, timeframe = 'daily') =>
+            request('/config/download-data', {
+                method: 'POST',
+                body: JSON.stringify({
+                    pin,
+                    ticker,
+                    start_date: startDate,
+                    end_date: endDate,
+                    timeframe,
+                }),
+            }),
 
+        // POST /config/update-all  body: { pin }
         manualUpdate: (pin) =>
-            request(`/config/update?pin=${encodeURIComponent(pin)}`, { method: 'POST' }),
+            request('/config/update-all', {
+                method: 'POST',
+                body: JSON.stringify({ pin }),
+            }),
 
+        // DELETE /config/asset/{ticker}?pin=...
         deleteAsset: (ticker, pin) =>
-            request(`/config/delete-asset?ticker=${encodeURIComponent(ticker)}&pin=${encodeURIComponent(pin)}`, { method: 'DELETE' }),
+            request(`/config/asset/${encodeURIComponent(ticker)}?pin=${encodeURIComponent(pin)}`, {
+                method: 'DELETE',
+            }),
 
-        // ===== BACKTESTS SALVOS =====
-        saveBacktest: (ticker, strategy, period = '1y', interval = '1d', capital = 10000) =>
-            request(`/saved-backtests/save?ticker=${ticker}&strategy=${strategy}&period=${period}&interval=${interval}&capital=${capital}`, { method: 'POST' }),
+        // GET /config/assets (no PIN)
+        listSavedAssets: () => request('/config/assets'),
 
-        listSavedBacktests: () => request('/saved-backtests'),
+        // ===== SAVED BACKTESTS =====
+        // POST /backtests/save  body: { result: {...} }
+        saveBacktest: (resultObj) =>
+            request('/backtests/save', {
+                method: 'POST',
+                body: JSON.stringify({ result: resultObj }),
+            }),
 
-        getSavedBacktest: (id) => request(`/saved-backtests/${id}`),
+        // GET /backtests/saved
+        listSavedBacktests: () => request('/backtests/saved'),
 
+        // GET /backtests/saved/{bt_id}
+        getSavedBacktest: (id) => request(`/backtests/saved/${encodeURIComponent(id)}`),
+
+        // DELETE /backtests/saved/{bt_id}
         deleteSavedBacktest: (id) =>
-            request(`/saved-backtests/${id}`, { method: 'DELETE' }),
+            request(`/backtests/saved/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     };
 })();
