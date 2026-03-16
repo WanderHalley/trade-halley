@@ -1,11 +1,35 @@
 /**
- * Trade Halley - App Principal v2.0
- * SPA com Dashboard, Back-tests, Configurações e Backtests Salvos
+ * Trade Halley - App Principal v3.0
+ * SPA completa com Estratégias, Back-tests, Config, Salvos
  */
 const App = (() => {
     let currentPage = 'dashboard';
     let cachedStrategies = null;
-    let configPin = null; // PIN guardado na sessão
+    let configPin = null;
+
+    // ============================================================
+    // HELPERS
+    // ============================================================
+
+    function statCard(label, value, icon, color) {
+        return `<div class="stat-card">
+            <div class="stat-header">
+                <span class="stat-label">${label}</span>
+                <div class="stat-icon" style="background:${color}22;color:${color}"><i class="${icon}"></i></div>
+            </div>
+            <div class="stat-value" style="color:${color}">${value}</div>
+        </div>`;
+    }
+
+    function statSkeleton(n) {
+        let h = '';
+        for (let i = 0; i < n; i++) h += '<div class="stat-card" style="min-height:100px"><div class="loading-inline"><div class="spinner-sm"></div></div></div>';
+        return h;
+    }
+
+    function loadingHTML(msg = '') {
+        return `<div class="loading-inline"><div class="spinner-sm"></div><span>${msg || 'Carregando...'}</span></div>`;
+    }
 
     // ============================================================
     // INIT
@@ -18,11 +42,10 @@ const App = (() => {
         updateMarketStatus();
         updateStorageIndicator();
         setInterval(updateMarketStatus, 60000);
-
         setTimeout(() => {
-            const overlay = document.getElementById('loadingOverlay');
-            if (overlay) overlay.style.display = 'none';
-        }, 1500);
+            const ov = document.getElementById('loadingOverlay');
+            if (ov) ov.classList.remove('active');
+        }, 1200);
     }
 
     // ============================================================
@@ -33,12 +56,8 @@ const App = (() => {
         document.querySelectorAll('.nav-item[data-page]').forEach(item => {
             item.addEventListener('click', (e) => {
                 e.preventDefault();
-                const page = item.dataset.page;
-                navigate(page);
-
-                if (window.innerWidth < 1024) {
-                    document.getElementById('sidebar').classList.remove('active');
-                }
+                navigate(item.dataset.page);
+                if (window.innerWidth < 768) closeMobile();
             });
         });
     }
@@ -46,43 +65,58 @@ const App = (() => {
     function navigate(page) {
         currentPage = page;
         document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-        const active = document.querySelector(`.nav-item[data-page="${page}"]`);
-        if (active) active.classList.add('active');
+        const act = document.querySelector(`.nav-item[data-page="${page}"]`);
+        if (act) act.classList.add('active');
 
         const titles = {
             'dashboard': 'Dashboard',
             'b3-daily': 'Back-Tests B3 Daily',
             'b3-intraday': 'Back-Tests B3 Intraday',
             'bmf-intraday': 'Back-Tests BMF Intraday',
+            'strategies': 'Estratégias',
             'saved-backtests': 'Backtests Salvos',
             'config': 'Configurações',
         };
         document.getElementById('pageTitle').textContent = titles[page] || 'Trade Halley';
 
         const content = document.getElementById('pageContent');
-        content.innerHTML = '<div class="loading-section"><div class="loading-spinner"></div></div>';
+        content.innerHTML = loadingHTML();
+        Charts.destroyAll();
 
         switch (page) {
             case 'dashboard': renderDashboard(); break;
             case 'b3-daily': renderBacktestPage('b3', '1d'); break;
             case 'b3-intraday': renderBacktestPage('b3', '1h'); break;
             case 'bmf-intraday': renderBacktestPage('bmf', '1h'); break;
+            case 'strategies': renderStrategiesPage(); break;
             case 'saved-backtests': renderSavedBacktests(); break;
             case 'config': renderConfig(); break;
         }
     }
 
     // ============================================================
-    // MOBILE MENU
+    // MOBILE
     // ============================================================
 
     function setupMobileMenu() {
         const toggle = document.getElementById('menuToggle');
         const sidebar = document.getElementById('sidebar');
         const close = document.getElementById('sidebarClose');
+        const overlay = document.getElementById('sidebarOverlay');
 
-        if (toggle) toggle.addEventListener('click', () => sidebar.classList.toggle('active'));
-        if (close) close.addEventListener('click', () => sidebar.classList.remove('active'));
+        if (toggle) toggle.addEventListener('click', () => {
+            sidebar.classList.add('open');
+            overlay.classList.add('active');
+            close.style.display = 'flex';
+        });
+        if (close) close.addEventListener('click', closeMobile);
+        if (overlay) overlay.addEventListener('click', closeMobile);
+    }
+
+    function closeMobile() {
+        document.getElementById('sidebar').classList.remove('open');
+        document.getElementById('sidebarOverlay').classList.remove('active');
+        document.getElementById('sidebarClose').style.display = 'none';
     }
 
     // ============================================================
@@ -92,31 +126,17 @@ const App = (() => {
     function updateMarketStatus() {
         const el = document.getElementById('marketStatus');
         if (!el) return;
-        const now = new Date();
-        const hour = now.getUTCHours() - 3;
-        const day = now.getDay();
-        const isOpen = day >= 1 && day <= 5 && hour >= 10 && hour < 17;
-        el.innerHTML = `
-            <span class="status-dot" style="background:${isOpen ? 'var(--success)' : 'var(--danger)'}"></span>
-            <span class="status-text">${isOpen ? 'Mercado Aberto' : 'Mercado Fechado'}</span>
-        `;
+        const open = Utils.isMarketOpen();
+        el.innerHTML = `<span class="status-dot${open ? '' : ' closed'}"></span><span>${open ? 'Mercado Aberto' : 'Mercado Fechado'}</span>`;
     }
-
-    // ============================================================
-    // STORAGE INDICATOR
-    // ============================================================
 
     async function updateStorageIndicator() {
         const el = document.getElementById('storageText');
         if (!el) return;
         try {
-            const data = await API.getDashboardSummary();
-            const stored = data.stored_assets || 0;
-            const size = data.storage_size_mb || 0;
-            el.textContent = `${stored} ativos • ${size} MB`;
-        } catch {
-            el.textContent = 'Offline';
-        }
+            const d = await API.getStorageStats();
+            el.textContent = `${d.total_assets || 0} ativos • ${d.total_records || 0} reg`;
+        } catch { el.textContent = 'Conectado'; }
     }
 
     // ============================================================
@@ -126,101 +146,65 @@ const App = (() => {
     async function renderDashboard() {
         const content = document.getElementById('pageContent');
         content.innerHTML = `
-            <div class="dashboard-stats" id="dashStats">
-                ${renderStatCardSkeleton(4)}
+            <div class="stats-grid" id="dashStats">${statSkeleton(4)}</div>
+            <div class="grid-2 section-gap">
+                <div class="card"><div class="card-header"><span class="card-title"><i class="fas fa-chart-line"></i> IBOV</span></div>
+                    <div class="card-body"><div class="chart-container"><canvas id="ibovChart"></canvas></div><p id="ibovFallback" style="display:none;color:var(--text-muted);text-align:center;padding:2rem"></p></div></div>
+                <div class="card"><div class="card-header"><span class="card-title"><i class="fas fa-dollar-sign"></i> Dólar (USD/BRL)</span></div>
+                    <div class="card-body"><div class="chart-container"><canvas id="dolarChart"></canvas></div><p id="dolarFallback" style="display:none;color:var(--text-muted);text-align:center;padding:2rem"></p></div></div>
             </div>
-            <div class="dashboard-grid">
-                <div class="card">
-                    <div class="card-header"><h3><i class="fas fa-chart-line"></i> IBOV / BOVA11</h3></div>
-                    <div class="card-body"><canvas id="ibovChart"></canvas><p id="ibovFallback" class="chart-fallback" style="display:none"></p></div>
-                </div>
-                <div class="card">
-                    <div class="card-header"><h3><i class="fas fa-dollar-sign"></i> Dólar (USD/BRL)</h3></div>
-                    <div class="card-body"><canvas id="dolarChart"></canvas><p id="dolarFallback" class="chart-fallback" style="display:none"></p></div>
-                </div>
-            </div>
-            <div class="card" style="margin-top:1.5rem">
-                <div class="card-header"><h3><i class="fas fa-table"></i> Visão de Mercado</h3></div>
-                <div class="card-body"><div id="marketTable">Carregando...</div></div>
-            </div>
-        `;
+            <div class="card"><div class="card-header"><span class="card-title"><i class="fas fa-table"></i> Visão de Mercado</span></div>
+                <div class="card-body" id="marketTableBody">${loadingHTML()}</div></div>`;
 
-        loadDashboardData();
-        loadIbovChart();
-        loadDolarChart();
-    }
-
-    async function loadDashboardData() {
+        // Stats
         try {
-            const data = await API.getDashboardSummary();
-            const stats = document.getElementById('dashStats');
-            if (stats) {
-                stats.innerHTML = `
-                    ${renderStatCard('Ações B3', data.total_b3_assets, 'fas fa-building', 'var(--accent)')}
-                    ${renderStatCard('Futuros BMF', data.total_bmf_assets, 'fas fa-exchange-alt', 'var(--warning)')}
-                    ${renderStatCard('Estratégias', data.total_strategies, 'fas fa-brain', 'var(--info)')}
-                    ${renderStatCard('Ativos Salvos', data.stored_assets || 0, 'fas fa-database', 'var(--success)')}
-                `;
-            }
+            const d = await API.getDashboardSummary();
+            const s = document.getElementById('dashStats');
+            if (s) s.innerHTML = `
+                ${statCard('Ações B3', d.total_b3 || 0, 'fas fa-building', '#00e676')}
+                ${statCard('Futuros BMF', d.total_bmf || 0, 'fas fa-exchange-alt', '#ffc107')}
+                ${statCard('Estratégias', d.total_strategies || 0, 'fas fa-brain', '#2979ff')}
+                ${statCard('Ativos Salvos', d.total_assets || 0, 'fas fa-database', '#69f0ae')}`;
 
-            const table = document.getElementById('marketTable');
-            if (table && data.market_overview && data.market_overview.length > 0) {
-                let html = '<table class="data-table"><thead><tr><th>Ativo</th><th>Nome</th><th>Preço</th><th>Variação</th><th>Volume</th></tr></thead><tbody>';
-                data.market_overview.forEach(a => {
-                    const color = a.change_pct >= 0 ? 'var(--success)' : 'var(--danger)';
-                    const arrow = a.change_pct >= 0 ? '▲' : '▼';
-                    html += `<tr>
-                        <td><strong style="color:var(--accent)">${a.ticker}</strong></td>
-                        <td>${a.name || '-'}</td>
-                        <td>R$ ${a.price.toFixed(2)}</td>
-                        <td style="color:${color};font-weight:600">${arrow} ${Math.abs(a.change_pct).toFixed(2)}%</td>
-                        <td>${a.volume ? a.volume.toLocaleString('pt-BR') : '-'}</td>
-                    </tr>`;
+            // Market table
+            const tb = document.getElementById('marketTableBody');
+            if (tb && d.top_tickers && d.top_tickers.length) {
+                let h = '<div class="table-container"><table class="data-table"><thead><tr><th>Ativo</th><th>Nome</th><th>Preço</th><th>Variação</th><th>Volume</th></tr></thead><tbody>';
+                d.top_tickers.forEach(a => {
+                    const pct = a.change_pct || 0;
+                    const col = pct >= 0 ? 'positive' : 'negative';
+                    const arrow = pct >= 0 ? '▲' : '▼';
+                    h += `<tr><td class="ticker-cell">${a.ticker}</td><td>${a.name||'-'}</td><td>R$ ${(a.price||0).toFixed(2)}</td><td class="${col}" style="font-weight:700">${arrow} ${Math.abs(pct).toFixed(2)}%</td><td>${a.volume ? Utils.formatVolume(a.volume) : '-'}</td></tr>`;
                 });
-                html += '</tbody></table>';
-                table.innerHTML = html;
-            } else if (table) {
-                table.innerHTML = '<p style="color:var(--text-muted)">Nenhum dado de mercado disponível no momento.</p>';
+                h += '</tbody></table></div>';
+                tb.innerHTML = h;
+            } else if (tb) {
+                tb.innerHTML = '<p style="color:var(--text-muted)">Nenhum dado de mercado disponível.</p>';
             }
-        } catch (e) {
-            console.error('Dashboard error:', e);
-        }
-    }
+        } catch (e) { console.error('Dashboard:', e); }
 
-    async function loadIbovChart() {
-        const canvas = document.getElementById('ibovChart');
-        const fallback = document.getElementById('ibovFallback');
-        if (!canvas) return;
-        const tickers = ['IBOV', 'BOVA11'];
-        for (const ticker of tickers) {
-            try {
-                const data = await API.getMarketData(ticker, '6mo', '1d');
-                if (data && data.data && data.data.length > 10) {
-                    Charts.renderPriceLine(canvas, data.data, `${ticker}`);
-                    return;
-                }
-            } catch {}
+        // Charts
+        for (const [canvasId, fallbackId, tickers, label] of [
+            ['ibovChart', 'ibovFallback', ['BOVA11', 'IBOV'], 'IBOV'],
+            ['dolarChart', 'dolarFallback', ['DOLAR', 'USDBRL=X'], 'USD/BRL'],
+        ]) {
+            let loaded = false;
+            for (const t of tickers) {
+                try {
+                    const data = await API.getMarketData(t, '6mo', '1d');
+                    if (data && data.data && data.data.length > 5) {
+                        Charts.priceLine(canvasId, data.data, label);
+                        loaded = true; break;
+                    }
+                } catch {}
+            }
+            if (!loaded) {
+                const cv = document.getElementById(canvasId);
+                const fb = document.getElementById(fallbackId);
+                if (cv) cv.style.display = 'none';
+                if (fb) { fb.style.display = 'block'; fb.textContent = 'Gráfico indisponível'; }
+            }
         }
-        canvas.style.display = 'none';
-        if (fallback) { fallback.style.display = 'block'; fallback.textContent = 'Gráfico indisponível no momento'; }
-    }
-
-    async function loadDolarChart() {
-        const canvas = document.getElementById('dolarChart');
-        const fallback = document.getElementById('dolarFallback');
-        if (!canvas) return;
-        const tickers = ['DOLAR'];
-        for (const ticker of tickers) {
-            try {
-                const data = await API.getMarketData(ticker, '6mo', '1d');
-                if (data && data.data && data.data.length > 10) {
-                    Charts.renderPriceLine(canvas, data.data, 'USD/BRL');
-                    return;
-                }
-            } catch {}
-        }
-        canvas.style.display = 'none';
-        if (fallback) { fallback.style.display = 'block'; fallback.textContent = 'Gráfico indisponível no momento'; }
     }
 
     // ============================================================
@@ -229,423 +213,334 @@ const App = (() => {
 
     async function renderBacktestPage(market, interval) {
         const content = document.getElementById('pageContent');
-
         try {
-            const strats = await API.getStrategies();
-            cachedStrategies = strats.strategies || [];
+            const s = await API.getStrategies();
+            cachedStrategies = s.strategies || [];
         } catch { cachedStrategies = []; }
 
-        const stratOptions = cachedStrategies.map(s =>
-            `<option value="${s.id}">${s.name} (${s.category})</option>`
-        ).join('');
+        const opts = cachedStrategies.map(s => `<option value="${s.id}">${s.name} (${s.category})</option>`).join('');
 
         content.innerHTML = `
-            <div class="bt-tabs">
-                <button class="bt-tab active" onclick="App._switchBtTab('bulk')">Todos os Ativos</button>
-                <button class="bt-tab" onclick="App._switchBtTab('single')">Ativo Individual</button>
-                <button class="bt-tab" onclick="App._switchBtTab('compare')">Comparar Estratégias</button>
-            </div>
-
-            <div id="btTabBulk" class="bt-tab-content active">
-                <div class="card">
-                    <div class="card-header">
-                        <h3><i class="fas fa-layer-group"></i> Back-test em Todos os Ativos</h3>
+        <div class="card section-gap">
+            <div class="card-header">
+                <span class="card-title"><i class="fas fa-cogs"></i> Configuração</span>
+                <div class="card-actions">
+                    <div class="tab-nav" id="btTabs">
+                        <button class="tab-btn active" data-tab="bulk">Todos os Ativos</button>
+                        <button class="tab-btn" data-tab="single">Individual</button>
+                        <button class="tab-btn" data-tab="compare">Comparar</button>
                     </div>
-                    <div class="card-body">
-                        <div class="config-form-row">
-                            <div class="config-form-group">
-                                <label>Estratégia</label>
-                                <select id="bulkStrategy">${stratOptions}</select>
-                            </div>
-                            <div class="config-form-group">
-                                <label>Período</label>
-                                <select id="bulkPeriod">
-                                    <option value="3mo">3 Meses</option>
-                                    <option value="6mo">6 Meses</option>
-                                    <option value="1y" selected>1 Ano</option>
-                                    <option value="2y">2 Anos</option>
-                                </select>
-                            </div>
-                            <div class="config-form-group">
-                                <label>Capital</label>
-                                <input type="number" id="bulkCapital" value="10000" min="100">
-                            </div>
-                            <div class="config-form-group" style="justify-content:flex-end">
-                                <button class="btn btn-primary" onclick="App.runBulk('${market}','${interval}')">
-                                    <i class="fas fa-play"></i> Executar
-                                </button>
-                            </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- BULK -->
+                <div id="tabBulk" class="tab-panel">
+                    <div class="filter-bar">
+                        <div class="form-group"><label class="form-label">Estratégia</label><select class="form-select" id="bulkStrategy">${opts}</select></div>
+                        <div class="form-group"><label class="form-label">Período</label><select class="form-select" id="bulkPeriod"><option value="3mo">3 Meses</option><option value="6mo">6 Meses</option><option value="1y" selected>1 Ano</option><option value="2y">2 Anos</option></select></div>
+                        <div class="form-group"><label class="form-label">Capital (R$)</label><input class="form-input" type="number" id="bulkCapital" value="10000" min="100"></div>
+                        <div class="form-group" style="justify-content:flex-end"><label class="form-label">&nbsp;</label><button class="btn btn-primary" id="btnRunBulk"><i class="fas fa-play"></i> Executar</button></div>
+                    </div>
+                </div>
+                <!-- SINGLE -->
+                <div id="tabSingle" class="tab-panel" style="display:none">
+                    <div class="filter-bar">
+                        <div class="form-group"><label class="form-label">Ticker</label><input class="form-input" type="text" id="singleTicker" placeholder="Ex: PETR4" style="text-transform:uppercase"></div>
+                        <div class="form-group"><label class="form-label">Estratégia</label><select class="form-select" id="singleStrategy">${opts}</select></div>
+                        <div class="form-group"><label class="form-label">Período</label><select class="form-select" id="singlePeriod"><option value="3mo">3M</option><option value="6mo">6M</option><option value="1y" selected>1A</option><option value="2y">2A</option></select></div>
+                        <div class="form-group"><label class="form-label">Capital</label><input class="form-input" type="number" id="singleCapital" value="10000" min="100"></div>
+                        <div class="form-group" style="justify-content:flex-end;gap:6px"><label class="form-label">&nbsp;</label>
+                            <button class="btn btn-primary" id="btnRunSingle"><i class="fas fa-play"></i> Analisar</button>
+                            <button class="btn btn-ghost" id="btnSaveSingle" title="Executar e Salvar"><i class="fas fa-save"></i></button>
                         </div>
                     </div>
                 </div>
-                <div id="bulkResults"></div>
-            </div>
-
-            <div id="btTabSingle" class="bt-tab-content">
-                <div class="card">
-                    <div class="card-header">
-                        <h3><i class="fas fa-search"></i> Back-test Individual</h3>
-                    </div>
-                    <div class="card-body">
-                        <div class="config-form-row">
-                            <div class="config-form-group">
-                                <label>Ticker</label>
-                                <input type="text" id="singleTicker" placeholder="Ex: PETR4" style="text-transform:uppercase">
-                            </div>
-                            <div class="config-form-group">
-                                <label>Estratégia</label>
-                                <select id="singleStrategy">${stratOptions}</select>
-                            </div>
-                            <div class="config-form-group">
-                                <label>Período</label>
-                                <select id="singlePeriod">
-                                    <option value="3mo">3 Meses</option>
-                                    <option value="6mo">6 Meses</option>
-                                    <option value="1y" selected>1 Ano</option>
-                                    <option value="2y">2 Anos</option>
-                                </select>
-                            </div>
-                            <div class="config-form-group">
-                                <label>Capital</label>
-                                <input type="number" id="singleCapital" value="10000" min="100">
-                            </div>
-                            <div class="config-form-group" style="justify-content:flex-end;gap:0.5rem;flex-direction:row">
-                                <button class="btn btn-primary" onclick="App.runSingle('${interval}')">
-                                    <i class="fas fa-play"></i> Analisar
-                                </button>
-                                <button class="btn btn-success" onclick="App.runAndSave('${interval}')" title="Executar e Salvar">
-                                    <i class="fas fa-save"></i>
-                                </button>
-                            </div>
-                        </div>
+                <!-- COMPARE -->
+                <div id="tabCompare" class="tab-panel" style="display:none">
+                    <div class="filter-bar">
+                        <div class="form-group"><label class="form-label">Ticker</label><input class="form-input" type="text" id="compareTicker" placeholder="Ex: PETR4" style="text-transform:uppercase"></div>
+                        <div class="form-group"><label class="form-label">Período</label><select class="form-select" id="comparePeriod"><option value="3mo">3M</option><option value="6mo">6M</option><option value="1y" selected>1A</option><option value="2y">2A</option></select></div>
+                        <div class="form-group"><label class="form-label">Capital</label><input class="form-input" type="number" id="compareCapital" value="10000" min="100"></div>
+                        <div class="form-group" style="justify-content:flex-end"><label class="form-label">&nbsp;</label><button class="btn btn-primary" id="btnRunCompare"><i class="fas fa-play"></i> Comparar</button></div>
                     </div>
                 </div>
-                <div id="singleResults"></div>
             </div>
+        </div>
+        <div id="btResults"></div>`;
 
-            <div id="btTabCompare" class="bt-tab-content">
-                <div class="card">
-                    <div class="card-header">
-                        <h3><i class="fas fa-balance-scale"></i> Comparar Estratégias</h3>
-                    </div>
-                    <div class="card-body">
-                        <div class="config-form-row">
-                            <div class="config-form-group">
-                                <label>Ticker</label>
-                                <input type="text" id="compareTicker" placeholder="Ex: PETR4" style="text-transform:uppercase">
-                            </div>
-                            <div class="config-form-group">
-                                <label>Período</label>
-                                <select id="comparePeriod">
-                                    <option value="3mo">3 Meses</option>
-                                    <option value="6mo">6 Meses</option>
-                                    <option value="1y" selected>1 Ano</option>
-                                    <option value="2y">2 Anos</option>
-                                </select>
-                            </div>
-                            <div class="config-form-group">
-                                <label>Capital</label>
-                                <input type="number" id="compareCapital" value="10000" min="100">
-                            </div>
-                            <div class="config-form-group" style="justify-content:flex-end">
-                                <button class="btn btn-primary" onclick="App.runCompare('${interval}')">
-                                    <i class="fas fa-play"></i> Comparar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div id="compareResults"></div>
-            </div>
-        `;
-    }
-
-    function _switchBtTab(tab) {
-        document.querySelectorAll('.bt-tab').forEach((el, i) => {
-            el.classList.toggle('active', ['bulk', 'single', 'compare'][i] === tab);
+        // Tab switching
+        document.querySelectorAll('#btTabs .tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#btTabs .tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                ['Bulk','Single','Compare'].forEach(t => {
+                    const el = document.getElementById('tab'+t);
+                    if (el) el.style.display = btn.dataset.tab === t.toLowerCase() ? '' : 'none';
+                });
+                document.getElementById('btResults').innerHTML = '';
+            });
         });
-        document.querySelectorAll('.bt-tab-content').forEach(el => el.classList.remove('active'));
-        const target = document.getElementById(`btTab${tab.charAt(0).toUpperCase() + tab.slice(1)}`);
-        if (target) target.classList.add('active');
+
+        // Buttons
+        document.getElementById('btnRunBulk').addEventListener('click', () => doBulk(market, interval));
+        document.getElementById('btnRunSingle').addEventListener('click', () => doSingle(interval, false));
+        document.getElementById('btnSaveSingle').addEventListener('click', () => doSingle(interval, true));
+        document.getElementById('btnRunCompare').addEventListener('click', () => doCompare(interval));
     }
 
-    // Bulk backtest
-    async function runBulk(market, interval) {
+    async function doBulk(market, interval) {
+        const res = document.getElementById('btResults');
         const strategy = document.getElementById('bulkStrategy').value;
         const period = document.getElementById('bulkPeriod').value;
         const capital = document.getElementById('bulkCapital').value;
-        const container = document.getElementById('bulkResults');
-        container.innerHTML = '<div class="loading-section"><div class="loading-spinner"></div><p>Executando back-tests... Isso pode levar alguns minutos.</p></div>';
-
+        res.innerHTML = `<div class="card"><div class="card-body">${loadingHTML('Executando back-tests... pode levar alguns minutos.')}</div></div>`;
         try {
             const data = await API.runBulkBacktest(market, strategy, period, interval, capital);
-            renderBulkResults(data, container);
-        } catch (e) {
-            container.innerHTML = `<div class="card"><div class="card-body"><p style="color:var(--danger)">Erro: ${e.message}</p></div></div>`;
-        }
+            if (!data.results || !data.results.length) { res.innerHTML = '<div class="card"><div class="card-body"><p style="color:var(--text-muted)">Nenhum resultado.</p></div></div>'; return; }
+            let h = `<div class="card"><div class="card-header"><span class="card-title"><i class="fas fa-trophy"></i> Resultados — ${data.strategy || strategy} (${data.total_assets} ativos, ${data.execution_time}s)</span></div><div class="card-body no-padding"><div class="table-container"><table class="data-table"><thead><tr><th>#</th><th>Ativo</th><th>Retorno %</th><th>Win Rate</th><th>Trades</th><th>PF</th><th>Max DD</th><th>Sharpe</th><th>Equity Final</th></tr></thead><tbody>`;
+            data.results.forEach((r, i) => {
+                const c = r.total_return_pct >= 0 ? 'positive' : 'negative';
+                h += `<tr><td>${i+1}</td><td class="ticker-cell">${r.ticker}</td><td class="${c}" style="font-weight:700">${r.total_return_pct.toFixed(2)}%</td><td>${r.win_rate.toFixed(1)}%</td><td>${r.total_trades}</td><td>${r.profit_factor.toFixed(2)}</td><td class="negative">${r.max_drawdown_pct.toFixed(2)}%</td><td>${r.sharpe_ratio.toFixed(2)}</td><td>R$ ${r.final_equity.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td></tr>`;
+            });
+            h += '</tbody></table></div></div></div>';
+            res.innerHTML = h;
+        } catch (e) { res.innerHTML = `<div class="card"><div class="card-body"><p class="negative">Erro: ${e.message}</p></div></div>`; }
     }
 
-    function renderBulkResults(data, container) {
-        if (!data.results || data.results.length === 0) {
-            container.innerHTML = '<div class="card"><div class="card-body"><p>Nenhum resultado disponível.</p></div></div>';
-            return;
-        }
-
-        let html = `
-            <div class="card" style="margin-top:1rem">
-                <div class="card-header">
-                    <h3><i class="fas fa-trophy"></i> Resultados — ${data.strategy} (${data.total_assets} ativos em ${data.execution_time}s)</h3>
-                </div>
-                <div class="card-body">
-                    <table class="data-table" id="bulkTable">
-                        <thead><tr>
-                            <th>#</th><th>Ativo</th><th>Retorno %</th><th>Win Rate</th>
-                            <th>Trades</th><th>Profit Factor</th><th>Max DD</th><th>Sharpe</th><th>Equity Final</th>
-                        </tr></thead><tbody>
-        `;
-
-        data.results.forEach((r, i) => {
-            const color = r.total_return_pct >= 0 ? 'var(--success)' : 'var(--danger)';
-            html += `<tr>
-                <td>${i + 1}</td>
-                <td><strong style="color:var(--accent)">${r.ticker}</strong></td>
-                <td style="color:${color};font-weight:700">${r.total_return_pct.toFixed(2)}%</td>
-                <td>${r.win_rate.toFixed(1)}%</td>
-                <td>${r.total_trades}</td>
-                <td>${r.profit_factor.toFixed(2)}</td>
-                <td style="color:var(--danger)">${r.max_drawdown_pct.toFixed(2)}%</td>
-                <td>${r.sharpe_ratio.toFixed(2)}</td>
-                <td>R$ ${r.final_equity.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-            </tr>`;
-        });
-
-        html += '</tbody></table></div></div>';
-        container.innerHTML = html;
-    }
-
-    // Single backtest
-    async function runSingle(interval) {
+    async function doSingle(interval, save) {
         const ticker = document.getElementById('singleTicker').value.toUpperCase().trim();
         const strategy = document.getElementById('singleStrategy').value;
         const period = document.getElementById('singlePeriod').value;
         const capital = document.getElementById('singleCapital').value;
-
         if (!ticker) { Utils.showToast('Digite um ticker', 'warning'); return; }
-
-        const container = document.getElementById('singleResults');
-        container.innerHTML = '<div class="loading-section"><div class="loading-spinner"></div></div>';
-
+        const res = document.getElementById('btResults');
+        res.innerHTML = `<div class="card"><div class="card-body">${loadingHTML('Executando...')}</div></div>`;
         try {
             const data = await API.runBacktest(ticker, strategy, period, interval, capital);
-            renderSingleResult(data, container);
-        } catch (e) {
-            container.innerHTML = `<div class="card"><div class="card-body"><p style="color:var(--danger)">Erro: ${e.message}</p></div></div>`;
-        }
-    }
-
-    // Run and save
-    async function runAndSave(interval) {
-        const ticker = document.getElementById('singleTicker').value.toUpperCase().trim();
-        const strategy = document.getElementById('singleStrategy').value;
-        const period = document.getElementById('singlePeriod').value;
-        const capital = document.getElementById('singleCapital').value;
-
-        if (!ticker) { Utils.showToast('Digite um ticker', 'warning'); return; }
-
-        const container = document.getElementById('singleResults');
-        container.innerHTML = '<div class="loading-section"><div class="loading-spinner"></div><p>Executando e salvando...</p></div>';
-
-        try {
-            const data = await API.saveBacktest(ticker, strategy, period, interval, capital);
-            Utils.showToast(`Back-test salvo! ID: ${data.id}`, 'success');
-            renderSingleResult(data.result, container);
-        } catch (e) {
-            container.innerHTML = `<div class="card"><div class="card-body"><p style="color:var(--danger)">Erro: ${e.message}</p></div></div>`;
-        }
+            if (save && data) {
+                try {
+                    const saved = await API.saveBacktest(data);
+                    Utils.showToast(`Salvo! ID: ${saved.id}`, 'success');
+                } catch (se) { Utils.showToast('Erro ao salvar: ' + se.message, 'error'); }
+            }
+            renderSingleResult(data, res);
+        } catch (e) { res.innerHTML = `<div class="card"><div class="card-body"><p class="negative">Erro: ${e.message}</p></div></div>`; }
     }
 
     function renderSingleResult(data, container) {
         const m = data.metrics;
-        const retColor = m.total_return_pct >= 0 ? 'var(--success)' : 'var(--danger)';
-
-        let html = `
-            <div class="card" style="margin-top:1rem">
-                <div class="card-header">
-                    <h3><i class="fas fa-chart-line"></i> ${data.ticker} — ${data.strategy_name}</h3>
-                </div>
-                <div class="card-body">
-                    <div class="dashboard-stats">
-                        ${renderStatCard('Retorno', `${m.total_return_pct.toFixed(2)}%`, 'fas fa-percentage', retColor)}
-                        ${renderStatCard('Win Rate', `${m.win_rate.toFixed(1)}%`, 'fas fa-bullseye', 'var(--info)')}
-                        ${renderStatCard('Trades', m.total_trades, 'fas fa-exchange-alt', 'var(--warning)')}
-                        ${renderStatCard('Sharpe', m.sharpe_ratio.toFixed(2), 'fas fa-chart-bar', 'var(--accent)')}
-                    </div>
-                    <div class="dashboard-grid" style="margin-top:1rem">
-                        <div><canvas id="equityChart"></canvas></div>
-                        <div><canvas id="winRateChart"></canvas></div>
-                    </div>
-                    <div style="margin-top:1.5rem">
-                        <h4 style="color:var(--text);margin-bottom:0.75rem"><i class="fas fa-list"></i> Métricas Completas</h4>
-                        <div class="storage-stats-grid">
-                            <div class="storage-stat-item"><span class="stat-value">R$ ${m.initial_capital.toLocaleString('pt-BR')}</span><span class="stat-label">Capital Inicial</span></div>
-                            <div class="storage-stat-item"><span class="stat-value" style="color:${retColor}">R$ ${m.final_equity.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span><span class="stat-label">Equity Final</span></div>
-                            <div class="storage-stat-item"><span class="stat-value">${m.profit_factor.toFixed(2)}</span><span class="stat-label">Profit Factor</span></div>
-                            <div class="storage-stat-item"><span class="stat-value" style="color:var(--danger)">${m.max_drawdown_pct.toFixed(2)}%</span><span class="stat-label">Max Drawdown</span></div>
-                            <div class="storage-stat-item"><span class="stat-value">${m.sortino_ratio.toFixed(2)}</span><span class="stat-label">Sortino</span></div>
-                            <div class="storage-stat-item"><span class="stat-value" style="color:var(--success)">${m.winning_trades}</span><span class="stat-label">Trades +</span></div>
-                            <div class="storage-stat-item"><span class="stat-value" style="color:var(--danger)">${m.losing_trades}</span><span class="stat-label">Trades -</span></div>
-                            <div class="storage-stat-item"><span class="stat-value">R$ ${m.avg_win.toFixed(2)}</span><span class="stat-label">Média Win</span></div>
-                            <div class="storage-stat-item"><span class="stat-value">R$ ${m.avg_loss.toFixed(2)}</span><span class="stat-label">Média Loss</span></div>
-                        </div>
-                    </div>
+        const rc = m.total_return_pct >= 0 ? '#00e676' : '#ff1744';
+        let h = `<div class="card"><div class="card-header"><span class="card-title"><i class="fas fa-chart-line"></i> ${data.ticker} — ${data.strategy_name}</span></div><div class="card-body">
+            <div class="stats-grid">
+                ${statCard('Retorno', `${m.total_return_pct.toFixed(2)}%`, 'fas fa-percentage', rc)}
+                ${statCard('Win Rate', `${m.win_rate.toFixed(1)}%`, 'fas fa-bullseye', '#2979ff')}
+                ${statCard('Trades', m.total_trades, 'fas fa-exchange-alt', '#ffc107')}
+                ${statCard('Sharpe', m.sharpe_ratio.toFixed(2), 'fas fa-chart-bar', '#00e676')}
+            </div>
+            <div class="grid-2" style="margin-top:1.5rem">
+                <div class="chart-container"><canvas id="eqChart"></canvas></div>
+                <div class="chart-container"><canvas id="wrChart"></canvas></div>
+            </div>
+            <div style="margin-top:1.5rem">
+                <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
+                    <div class="stat-card"><div class="stat-label">Capital Inicial</div><div class="stat-value" style="font-size:16px">R$ ${m.initial_capital.toLocaleString('pt-BR')}</div></div>
+                    <div class="stat-card"><div class="stat-label">Equity Final</div><div class="stat-value" style="font-size:16px;color:${rc}">R$ ${m.final_equity.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div>
+                    <div class="stat-card"><div class="stat-label">Profit Factor</div><div class="stat-value" style="font-size:16px">${m.profit_factor.toFixed(2)}</div></div>
+                    <div class="stat-card"><div class="stat-label">Max Drawdown</div><div class="stat-value negative" style="font-size:16px">${m.max_drawdown_pct.toFixed(2)}%</div></div>
+                    <div class="stat-card"><div class="stat-label">Sortino</div><div class="stat-value" style="font-size:16px">${m.sortino_ratio.toFixed(2)}</div></div>
+                    <div class="stat-card"><div class="stat-label">Trades +</div><div class="stat-value positive" style="font-size:16px">${m.winning_trades}</div></div>
+                    <div class="stat-card"><div class="stat-label">Trades -</div><div class="stat-value negative" style="font-size:16px">${m.losing_trades}</div></div>
+                    <div class="stat-card"><div class="stat-label">Média Win</div><div class="stat-value" style="font-size:16px">R$ ${m.avg_win.toFixed(2)}</div></div>
+                    <div class="stat-card"><div class="stat-label">Média Loss</div><div class="stat-value" style="font-size:16px">R$ ${m.avg_loss.toFixed(2)}</div></div>
                 </div>
             </div>
-        `;
-
-        container.innerHTML = html;
-
-        // Charts
-        if (data.equity_curve && data.equity_curve.length > 0) {
-            const eqCanvas = document.getElementById('equityChart');
-            if (eqCanvas) Charts.renderEquityCurve(eqCanvas, data.equity_curve);
-        }
-        const wrCanvas = document.getElementById('winRateChart');
-        if (wrCanvas) Charts.renderWinRateDonut(wrCanvas, m.winning_trades, m.losing_trades);
+        </div></div>`;
+        container.innerHTML = h;
+        if (data.equity_curve && data.equity_curve.length) Charts.equityCurve('eqChart', data.equity_curve, m.initial_capital);
+        Charts.winRateDonut('wrChart', m.winning_trades, m.losing_trades);
     }
 
-    // Compare
-    async function runCompare(interval) {
+    async function doCompare(interval) {
         const ticker = document.getElementById('compareTicker').value.toUpperCase().trim();
         const period = document.getElementById('comparePeriod').value;
         const capital = document.getElementById('compareCapital').value;
-
         if (!ticker) { Utils.showToast('Digite um ticker', 'warning'); return; }
-
-        const container = document.getElementById('compareResults');
-        container.innerHTML = '<div class="loading-section"><div class="loading-spinner"></div><p>Comparando todas as estratégias... Pode levar alguns minutos.</p></div>';
-
+        const res = document.getElementById('btResults');
+        res.innerHTML = `<div class="card"><div class="card-body">${loadingHTML('Comparando todas as estratégias...')}</div></div>`;
         try {
             const data = await API.compareStrategies(ticker, period, interval, capital);
-            renderCompareResults(data, container);
-        } catch (e) {
-            container.innerHTML = `<div class="card"><div class="card-body"><p style="color:var(--danger)">Erro: ${e.message}</p></div></div>`;
-        }
-    }
-
-    function renderCompareResults(data, container) {
-        if (!data.results || data.results.length === 0) {
-            container.innerHTML = '<div class="card"><div class="card-body"><p>Nenhum resultado.</p></div></div>';
-            return;
-        }
-
-        let html = `
-            <div class="card" style="margin-top:1rem">
-                <div class="card-header">
-                    <h3><i class="fas fa-ranking-star"></i> Ranking — ${data.ticker} (${data.total_strategies} estratégias)</h3>
-                </div>
-                <div class="card-body">
-                    <table class="data-table">
-                        <thead><tr><th>#</th><th>Estratégia</th><th>Categoria</th><th>Retorno %</th><th>Win Rate</th><th>PF</th><th>Max DD</th><th>Sharpe</th><th>Trades</th></tr></thead><tbody>
-        `;
-
-        data.results.forEach((r, i) => {
-            const color = r.total_return_pct >= 0 ? 'var(--success)' : 'var(--danger)';
-            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
-            html += `<tr${i === 0 ? ' style="background:rgba(0,255,136,0.05)"' : ''}>
-                <td>${medal}</td>
-                <td><strong>${r.strategy_name}</strong></td>
-                <td><span class="badge">${r.category}</span></td>
-                <td style="color:${color};font-weight:700">${r.total_return_pct.toFixed(2)}%</td>
-                <td>${r.win_rate.toFixed(1)}%</td>
-                <td>${r.profit_factor.toFixed(2)}</td>
-                <td style="color:var(--danger)">${r.max_drawdown_pct.toFixed(2)}%</td>
-                <td>${r.sharpe_ratio.toFixed(2)}</td>
-                <td>${r.total_trades}</td>
-            </tr>`;
-        });
-
-        html += '</tbody></table></div></div>';
-        container.innerHTML = html;
+            if (!data.results || !data.results.length) { res.innerHTML = '<div class="card"><div class="card-body"><p style="color:var(--text-muted)">Nenhum resultado.</p></div></div>'; return; }
+            let h = `<div class="card"><div class="card-header"><span class="card-title"><i class="fas fa-ranking-star"></i> Ranking — ${data.ticker} (${data.strategies_tested} estratégias)</span></div><div class="card-body no-padding"><div class="table-container"><table class="data-table"><thead><tr><th>#</th><th>Estratégia</th><th>Categoria</th><th>Retorno %</th><th>Win Rate</th><th>PF</th><th>Max DD</th><th>Sharpe</th><th>Trades</th></tr></thead><tbody>`;
+            data.results.forEach((r, i) => {
+                const c = r.total_return_pct >= 0 ? 'positive' : 'negative';
+                const medal = i < 3 ? ['🥇','🥈','🥉'][i] : `${i+1}`;
+                h += `<tr${i===0 ? ' style="background:rgba(0,230,118,0.04)"' : ''}><td>${medal}</td><td><strong>${r.strategy_name}</strong></td><td><span class="badge badge-blue">${r.category}</span></td><td class="${c}" style="font-weight:700">${r.total_return_pct.toFixed(2)}%</td><td>${r.win_rate.toFixed(1)}%</td><td>${r.profit_factor.toFixed(2)}</td><td class="negative">${r.max_drawdown_pct.toFixed(2)}%</td><td>${r.sharpe_ratio.toFixed(2)}</td><td>${r.total_trades}</td></tr>`;
+            });
+            h += '</tbody></table></div></div></div>';
+            res.innerHTML = h;
+        } catch (e) { res.innerHTML = `<div class="card"><div class="card-body"><p class="negative">Erro: ${e.message}</p></div></div>`; }
     }
 
     // ============================================================
-    // SAVED BACKTESTS PAGE
+    // STRATEGIES PAGE (NOVA)
+    // ============================================================
+
+    async function renderStrategiesPage() {
+        const content = document.getElementById('pageContent');
+        content.innerHTML = loadingHTML('Carregando estratégias...');
+
+        let strats = [];
+        try {
+            const s = await API.getStrategies();
+            strats = s.strategies || [];
+        } catch (e) {
+            content.innerHTML = `<p class="negative">Erro ao carregar estratégias: ${e.message}</p>`;
+            return;
+        }
+
+        // Categorize by type
+        const daily = strats.filter(s => !s.category.toLowerCase().includes('intraday'));
+        const intra = strats; // all strategies can be used for intraday too
+
+        // Build timeframe tabs
+        const timeframes = [
+            { id: 'daily', label: 'B3 Daily', icon: 'fas fa-chart-bar', desc: 'Estratégias para timeframe diário (ações B3)' },
+            { id: 'intraday_b3', label: 'B3 Intraday', icon: 'fas fa-chart-area', desc: 'Estratégias para timeframe intraday (ações B3 - 1h)' },
+            { id: 'intraday_bmf', label: 'BMF Intraday', icon: 'fas fa-exchange-alt', desc: 'Estratégias para futuros BMF (intraday - 1h)' },
+        ];
+
+        let tabBtns = '';
+        let tabPanels = '';
+
+        timeframes.forEach((tf, i) => {
+            tabBtns += `<button class="tab-btn${i===0?' active':''}" data-stab="${tf.id}">${tf.label}</button>`;
+
+            // Entry strategies
+            const entryStrats = strats.filter(s => {
+                if (tf.id === 'daily') return true; // all applicable to daily
+                return true; // all applicable to intraday too
+            });
+
+            // Exit strategies (for now same list, backend decides)
+            const exitStrats = strats;
+
+            let cards = '';
+            entryStrats.forEach(s => {
+                cards += `
+                <div class="strategy-card">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                        <div>
+                            <div class="strategy-name">${s.name}</div>
+                            <span class="badge badge-blue" style="margin-bottom:8px">${s.category}</span>
+                        </div>
+                        <span class="badge badge-green">Ativa</span>
+                    </div>
+                    <div class="strategy-desc">${s.description}</div>
+                    <div style="margin-top:12px;display:flex;gap:8px">
+                        <span class="badge badge-yellow" style="font-size:10px">ID: ${s.id}</span>
+                    </div>
+                </div>`;
+            });
+
+            tabPanels += `
+            <div id="sTab_${tf.id}" class="stab-panel" style="${i>0?'display:none':''}">
+                <div style="margin-bottom:1rem">
+                    <p style="color:var(--text-muted);font-size:13px"><i class="${tf.icon}" style="color:var(--green-primary);margin-right:6px"></i>${tf.desc}</p>
+                </div>
+                <div style="display:flex;gap:8px;margin-bottom:1.5rem">
+                    <span class="badge badge-green">${entryStrats.length} estratégias disponíveis</span>
+                </div>
+                <div class="strategy-grid">${cards}</div>
+            </div>`;
+        });
+
+        content.innerHTML = `
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title"><i class="fas fa-brain"></i> Gestão de Estratégias</span>
+                <div class="card-actions">
+                    <span class="badge badge-green">${strats.length} estratégias no sistema</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="tab-nav" id="stratTabs" style="margin-bottom:1.5rem">${tabBtns}</div>
+                ${tabPanels}
+                <div style="margin-top:2rem;padding:1.5rem;background:var(--bg-tertiary);border-radius:var(--radius-md);border:1px dashed var(--border-light)">
+                    <h4 style="color:var(--text-primary);margin-bottom:8px"><i class="fas fa-info-circle" style="color:var(--blue-primary)"></i> Sobre as Estratégias</h4>
+                    <p style="color:var(--text-secondary);font-size:13px;line-height:1.6">
+                        As estratégias são definidas no backend (<code>strategies.py</code>) e carregadas automaticamente.
+                        Para adicionar novas estratégias do tipo Trade Certo (% do fechamento anterior, sniper, Bollinger, etc.),
+                        o <code>strategy_engine.py</code> será implementado na Phase 2 do backend, conectando com as 55 estratégias
+                        já inseridas no Supabase. As estratégias atuais (13) são baseadas em indicadores técnicos clássicos.
+                    </p>
+                </div>
+            </div>
+        </div>`;
+
+        // Tab switching
+        document.querySelectorAll('#stratTabs .tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#stratTabs .tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                document.querySelectorAll('.stab-panel').forEach(p => p.style.display = 'none');
+                const target = document.getElementById('sTab_' + btn.dataset.stab);
+                if (target) target.style.display = '';
+            });
+        });
+    }
+
+    // ============================================================
+    // SAVED BACKTESTS
     // ============================================================
 
     async function renderSavedBacktests() {
         const content = document.getElementById('pageContent');
-        content.innerHTML = '<div class="loading-section"><div class="loading-spinner"></div></div>';
-
+        content.innerHTML = loadingHTML();
         try {
             const data = await API.listSavedBacktests();
-            const backtests = data.backtests || [];
-
-            if (backtests.length === 0) {
-                content.innerHTML = `
-                    <div class="saved-bt-empty">
-                        <i class="fas fa-inbox"></i>
-                        <h3>Nenhum back-test salvo</h3>
-                        <p style="color:var(--text-muted)">Execute um back-test e clique em <i class="fas fa-save"></i> para salvar.</p>
-                    </div>
-                `;
+            const bts = data.backtests || [];
+            if (!bts.length) {
+                content.innerHTML = `<div class="empty-state"><i class="fas fa-inbox"></i><p>Nenhum back-test salvo. Execute um back-test e clique em <i class="fas fa-save"></i>.</p></div>`;
                 return;
             }
-
-            let html = '<div class="saved-bt-grid">';
-            backtests.forEach(bt => {
-                const retColor = bt.total_return_pct >= 0 ? 'positive' : 'negative';
-                const retSign = bt.total_return_pct >= 0 ? '+' : '';
-                const dateStr = bt.saved_at ? new Date(bt.saved_at).toLocaleDateString('pt-BR') : '-';
-                html += `
-                    <div class="saved-bt-card" onclick="App.viewSavedBt('${bt.id}')">
-                        <button class="bt-delete" onclick="event.stopPropagation(); App.deleteSavedBt('${bt.id}')">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                        <div class="bt-header">
-                            <span class="bt-ticker">${bt.ticker}</span>
-                            <span class="bt-date">${dateStr}</span>
-                        </div>
-                        <div class="bt-strategy">${bt.strategy}</div>
-                        <div class="bt-return ${retColor}">${retSign}${bt.total_return_pct.toFixed(2)}%</div>
+            let h = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem">';
+            bts.forEach(bt => {
+                const ret = bt.total_return_pct || 0;
+                const c = ret >= 0 ? 'positive' : 'negative';
+                const sign = ret >= 0 ? '+' : '';
+                const date = bt.saved_at ? Utils.formatDate(bt.saved_at) : '-';
+                h += `<div class="strategy-card" style="cursor:pointer" onclick="App._viewBt('${bt.id}')">
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                        <span class="ticker-cell" style="font-size:18px">${bt.ticker || 'N/A'}</span>
+                        <span style="font-size:12px;color:var(--text-muted)">${date}</span>
                     </div>
-                `;
+                    <div style="color:var(--text-secondary);font-size:12px;margin:8px 0">${bt.strategy || ''}</div>
+                    <div class="${c}" style="font-size:22px;font-weight:800">${sign}${ret.toFixed(2)}%</div>
+                    <button class="btn btn-ghost btn-sm" style="margin-top:12px;color:var(--red-primary);border-color:var(--red-primary)" onclick="event.stopPropagation();App._delBt('${bt.id}')"><i class="fas fa-trash"></i> Remover</button>
+                </div>`;
             });
-            html += '</div>';
-            content.innerHTML = html;
-        } catch (e) {
-            content.innerHTML = `<p style="color:var(--danger)">Erro ao carregar backtests: ${e.message}</p>`;
-        }
+            h += '</div>';
+            content.innerHTML = h;
+        } catch (e) { content.innerHTML = `<p class="negative">Erro: ${e.message}</p>`; }
     }
 
-    async function viewSavedBt(id) {
+    async function _viewBt(id) {
         const content = document.getElementById('pageContent');
-        content.innerHTML = '<div class="loading-section"><div class="loading-spinner"></div></div>';
-
+        content.innerHTML = loadingHTML();
         try {
             const data = await API.getSavedBacktest(id);
-            let html = `<button class="btn btn-ghost" onclick="App.navigate('saved-backtests')" style="margin-bottom:1rem"><i class="fas fa-arrow-left"></i> Voltar</button>`;
-            const container = document.createElement('div');
-            container.innerHTML = html;
-            content.innerHTML = '';
-            content.appendChild(container);
-
-            const resultsDiv = document.createElement('div');
-            content.appendChild(resultsDiv);
-            renderSingleResult(data, resultsDiv);
-        } catch (e) {
-            content.innerHTML = `<p style="color:var(--danger)">Erro: ${e.message}</p>`;
-        }
+            content.innerHTML = `<button class="btn btn-ghost" onclick="App.navigate('saved-backtests')" style="margin-bottom:1rem"><i class="fas fa-arrow-left"></i> Voltar</button><div id="btViewResult"></div>`;
+            renderSingleResult(data, document.getElementById('btViewResult'));
+        } catch (e) { content.innerHTML = `<p class="negative">Erro: ${e.message}</p>`; }
     }
 
-    async function deleteSavedBt(id) {
+    async function _delBt(id) {
         if (!confirm('Remover este back-test salvo?')) return;
         try {
             await API.deleteSavedBacktest(id);
-            Utils.showToast('Back-test removido', 'success');
+            Utils.showToast('Removido', 'success');
             renderSavedBacktests();
-        } catch (e) {
-            Utils.showToast('Erro ao remover: ' + e.message, 'error');
-        }
+        } catch (e) { Utils.showToast('Erro: ' + e.message, 'error'); }
     }
 
     // ============================================================
@@ -654,418 +549,241 @@ const App = (() => {
 
     async function renderConfig() {
         const content = document.getElementById('pageContent');
+        if (configPin) { renderConfigPanel(content); return; }
 
-        // Se já tem PIN na sessão, mostra direto
-        if (configPin) {
-            renderConfigPanel(content);
-            return;
-        }
-
-        // Mostra gate de PIN
         content.innerHTML = `
-            <div class="pin-gate">
-                <i class="fas fa-lock pin-icon"></i>
-                <h2>Área Protegida</h2>
-                <p>Digite o PIN de acesso para gerenciar dados, ativos e configurações do sistema.</p>
-                <div class="pin-input-group">
-                    <input type="password" id="pinInput" placeholder="PIN" maxlength="20"
-                        onkeydown="if(event.key==='Enter') App.submitPin()">
-                    <button class="btn btn-primary" onclick="App.submitPin()">
-                        <i class="fas fa-unlock"></i> Entrar
-                    </button>
-                </div>
-                <p id="pinError" style="color:var(--danger);display:none;font-size:0.85rem"></p>
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:1.5rem">
+            <i class="fas fa-lock" style="font-size:3rem;color:var(--green-primary);opacity:0.6"></i>
+            <h2 style="color:var(--text-primary)">Área Protegida</h2>
+            <p style="color:var(--text-muted);max-width:400px;text-align:center">Digite o PIN para acessar configurações do sistema.</p>
+            <div style="display:flex;gap:12px;align-items:center">
+                <input class="form-input" type="password" id="pinInput" placeholder="PIN" maxlength="20"
+                    style="width:200px;text-align:center;font-size:18px;letter-spacing:4px"
+                    onkeydown="if(event.key==='Enter')App._submitPin()">
+                <button class="btn btn-primary" onclick="App._submitPin()"><i class="fas fa-unlock"></i> Entrar</button>
             </div>
-        `;
-
+            <p id="pinError" class="negative" style="display:none;font-size:13px"></p>
+        </div>`;
         document.getElementById('pinInput').focus();
     }
 
-    async function submitPin() {
+    async function _submitPin() {
         const input = document.getElementById('pinInput');
         const error = document.getElementById('pinError');
         const pin = input.value.trim();
-
         if (!pin) { error.textContent = 'Digite o PIN'; error.style.display = 'block'; return; }
-
         try {
-            const result = await API.verifyPin(pin);
-            if (result.valid) {
-                configPin = pin;
-                renderConfigPanel(document.getElementById('pageContent'));
-            } else {
-                error.textContent = 'PIN incorreto';
-                error.style.display = 'block';
-                input.value = '';
-                input.focus();
-            }
+            await API.verifyPin(pin);
+            configPin = pin;
+            renderConfigPanel(document.getElementById('pageContent'));
         } catch (e) {
-            error.textContent = 'Erro de conexão: ' + e.message;
+            error.textContent = e.message || 'PIN incorreto';
             error.style.display = 'block';
+            input.value = ''; input.focus();
         }
     }
 
     async function renderConfigPanel(content) {
-        content.innerHTML = '<div class="loading-section"><div class="loading-spinner"></div></div>';
+        content.innerHTML = loadingHTML();
 
-        let storageData = { stats: {}, assets: {} };
-        try {
-            storageData = await API.getStorageInfo(configPin);
-        } catch {}
+        let stats = {};
+        let assets = [];
+        try { stats = await API.getStorageStats(); } catch {}
+        try { const r = await API.listSavedAssets(); assets = r.assets || []; } catch {}
 
-        const stats = storageData.stats || {};
-        const assets = storageData.assets || {};
+        const lastUp = stats.last_auto_update ? Utils.formatDateTime(stats.last_auto_update) : 'Nunca';
 
-        // Build asset table rows
         let assetRows = '';
-        const assetEntries = Object.entries(assets);
-        if (assetEntries.length === 0) {
-            assetRows = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">Nenhum ativo salvo ainda</td></tr>';
+        if (!assets.length) {
+            assetRows = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">Nenhum ativo salvo</td></tr>';
         } else {
-            assetEntries.forEach(([ticker, info]) => {
-                const dailyInfo = info.daily ? `${info.daily.start} → ${info.daily.end} (${info.daily.records})` : '-';
-                const intraInfo = info.intraday ? `${info.intraday.start} → ${info.intraday.end} (${info.intraday.records})` : '-';
-                const lastUp = info.last_update ? new Date(info.last_update).toLocaleString('pt-BR') : '-';
+            assets.forEach(a => {
+                const ticker = a.ticker || a;
                 assetRows += `<tr>
                     <td class="ticker-cell">${ticker}</td>
-                    <td class="date-cell">${dailyInfo}</td>
-                    <td class="date-cell">${intraInfo}</td>
-                    <td class="date-cell">${lastUp}</td>
-                    <td class="actions-cell">
-                        <button class="btn-delete-asset" onclick="App.deleteAsset('${ticker}')">
-                            <i class="fas fa-trash"></i> Remover
-                        </button>
-                    </td>
+                    <td>${a.daily_records || 0}</td>
+                    <td>${a.intraday_records || 0}</td>
+                    <td>${a.last_update ? Utils.formatDateTime(a.last_update) : '-'}</td>
+                    <td><button class="btn btn-ghost btn-sm" style="color:var(--red-primary);border-color:var(--red-primary)" onclick="App._deleteAsset('${ticker}')"><i class="fas fa-trash"></i></button></td>
                 </tr>`;
             });
         }
 
-        const lastAutoUp = stats.last_auto_update ? new Date(stats.last_auto_update).toLocaleString('pt-BR') : 'Nunca';
-
         content.innerHTML = `
-            <div class="config-layout">
-
-                <!-- Storage Stats -->
-                <div class="config-section">
-                    <div class="config-section-header">
-                        <h3><i class="fas fa-database"></i> Armazenamento</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+            <!-- Storage -->
+            <div class="card">
+                <div class="card-header"><span class="card-title"><i class="fas fa-database"></i> Armazenamento</span></div>
+                <div class="card-body">
+                    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
+                        ${statCard('Ativos', stats.total_assets||0, 'fas fa-coins', '#00e676')}
+                        ${statCard('Daily', stats.daily_assets||0, 'fas fa-calendar', '#2979ff')}
+                        ${statCard('Intraday', stats.intraday_assets||0, 'fas fa-clock', '#ffc107')}
                     </div>
-                    <div class="storage-stats-grid">
-                        <div class="storage-stat-item"><span class="stat-value">${stats.total_assets || 0}</span><span class="stat-label">Ativos</span></div>
-                        <div class="storage-stat-item"><span class="stat-value">${stats.daily_assets || 0}</span><span class="stat-label">Daily</span></div>
-                        <div class="storage-stat-item"><span class="stat-value">${stats.intraday_assets || 0}</span><span class="stat-label">Intraday</span></div>
-                        <div class="storage-stat-item"><span class="stat-value">${(stats.total_records || 0).toLocaleString('pt-BR')}</span><span class="stat-label">Registros</span></div>
-                        <div class="storage-stat-item"><span class="stat-value">${stats.storage_size_mb || 0}</span><span class="stat-label">MB</span></div>
-                        <div class="storage-stat-item"><span class="stat-value">${stats.total_backtests || 0}</span><span class="stat-label">BTs Salvos</span></div>
-                    </div>
-                </div>
-
-                <!-- Atualização -->
-                <div class="config-section">
-                    <div class="config-section-header">
-                        <h3><i class="fas fa-sync-alt"></i> Atualização de Dados</h3>
-                    </div>
-                    <div class="update-info">
-                        <i class="fas fa-clock update-icon"></i>
-                        <div class="update-text">
-                            <h4>Atualização Automática: 18h (Brasília)</h4>
-                            <p>Última atualização automática: ${lastAutoUp}</p>
-                        </div>
-                    </div>
-                    <button class="btn btn-primary" onclick="App.manualUpdate()" id="btnManualUpdate" style="width:100%">
-                        <i class="fas fa-sync-alt"></i> Atualizar Todos os Ativos Agora
-                    </button>
-                    <div id="updateResult" style="margin-top:0.75rem"></div>
-                </div>
-
-                <!-- Download de Dados -->
-                <div class="config-section full-width">
-                    <div class="config-section-header">
-                        <h3><i class="fas fa-download"></i> Baixar Dados de Ativo</h3>
-                    </div>
-                    <div class="config-form">
-                        <div class="config-form-row">
-                            <div class="config-form-group">
-                                <label>Ticker</label>
-                                <input type="text" id="dlTicker" placeholder="Ex: PETR4" style="text-transform:uppercase"
-                                    oninput="App.onTickerInput()">
-                                <div id="dlTickerValidation" class="ticker-validation"></div>
-                            </div>
-                            <div class="config-form-group">
-                                <label>Data Início</label>
-                                <input type="date" id="dlStartDate" value="${getDefaultStartDate()}">
-                            </div>
-                            <div class="config-form-group">
-                                <label>Data Fim</label>
-                                <input type="date" id="dlEndDate" value="${getTodayDate()}">
-                            </div>
-                            <div class="config-form-group">
-                                <label>Timeframe</label>
-                                <select id="dlTimeframe">
-                                    <option value="daily" selected>Diário (1d)</option>
-                                    <option value="intraday">Intraday (1h)</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="config-form-actions">
-                            <button class="btn btn-primary" onclick="App.downloadData()" id="btnDownload">
-                                <i class="fas fa-download"></i> Baixar Dados
-                            </button>
-                        </div>
-                        <div id="dlResult"></div>
+                    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-top:12px">
+                        ${statCard('Registros', (stats.total_records||0).toLocaleString('pt-BR'), 'fas fa-table', '#69f0ae')}
+                        ${statCard('BTs Salvos', stats.total_backtests||0, 'fas fa-save', '#ab47bc')}
+                        ${statCard('Tipo', stats.storage_type||'supabase', 'fas fa-server', '#26c6da')}
                     </div>
                 </div>
-
-                <!-- Ativos Salvos -->
-                <div class="config-section full-width">
-                    <div class="config-section-header">
-                        <h3><i class="fas fa-list"></i> Ativos Armazenados (${assetEntries.length})</h3>
-                        <button class="btn btn-ghost btn-sm" onclick="App.refreshConfig()">
-                            <i class="fas fa-refresh"></i> Atualizar
-                        </button>
-                    </div>
-                    <div class="asset-table-container">
-                        <table class="asset-table">
-                            <thead><tr>
-                                <th>Ticker</th>
-                                <th>Daily (Início → Fim / Registros)</th>
-                                <th>Intraday (Início → Fim / Registros)</th>
-                                <th>Última Atualização</th>
-                                <th>Ações</th>
-                            </tr></thead>
-                            <tbody>${assetRows}</tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Alterar PIN -->
-                <div class="config-section">
-                    <div class="config-section-header">
-                        <h3><i class="fas fa-key"></i> Alterar PIN</h3>
-                    </div>
-                    <div class="pin-change-form">
-                        <div class="config-form-group">
-                            <label>PIN Atual</label>
-                            <input type="password" id="oldPin" placeholder="****">
-                        </div>
-                        <div class="config-form-group">
-                            <label>Novo PIN</label>
-                            <input type="password" id="newPin" placeholder="****">
-                        </div>
-                        <button class="btn btn-warning" onclick="App.changePin()" style="align-self:flex-end">
-                            <i class="fas fa-key"></i> Alterar
-                        </button>
-                    </div>
-                    <div id="pinChangeResult" style="margin-top:0.5rem"></div>
-                </div>
-
-                <!-- Sair -->
-                <div class="config-section">
-                    <div class="config-section-header">
-                        <h3><i class="fas fa-sign-out-alt"></i> Sessão</h3>
-                    </div>
-                    <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1rem">Ao sair, o PIN da sessão será esquecido. Você precisará digitá-lo novamente.</p>
-                    <button class="btn btn-danger" onclick="App.logoutConfig()" style="width:100%">
-                        <i class="fas fa-sign-out-alt"></i> Sair das Configurações
-                    </button>
-                </div>
-
             </div>
-        `;
+
+            <!-- Atualização -->
+            <div class="card">
+                <div class="card-header"><span class="card-title"><i class="fas fa-sync-alt"></i> Atualização de Dados</span></div>
+                <div class="card-body">
+                    <div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:var(--bg-tertiary);border-radius:var(--radius-sm);margin-bottom:1rem">
+                        <i class="fas fa-clock" style="font-size:2rem;color:var(--green-primary)"></i>
+                        <div><h4 style="font-size:14px">Automática: 18h (BRT)</h4><p style="color:var(--text-muted);font-size:12px">Última: ${lastUp}</p></div>
+                    </div>
+                    <button class="btn btn-primary" style="width:100%" id="btnManualUpdate" onclick="App._manualUpdate()"><i class="fas fa-sync-alt"></i> Atualizar Tudo Agora</button>
+                    <div id="updateResult" style="margin-top:8px"></div>
+                </div>
+            </div>
+
+            <!-- Download -->
+            <div class="card" style="grid-column:1/-1">
+                <div class="card-header"><span class="card-title"><i class="fas fa-download"></i> Baixar Dados de Ativo</span></div>
+                <div class="card-body">
+                    <div class="filter-bar">
+                        <div class="form-group"><label class="form-label">Ticker</label><input class="form-input" type="text" id="dlTicker" placeholder="PETR4" style="text-transform:uppercase" oninput="App._validateTicker()"></div>
+                        <div class="form-group"><label class="form-label">Início</label><input class="form-input" type="date" id="dlStart" value="${Utils.getDefaultStartDate()}"></div>
+                        <div class="form-group"><label class="form-label">Fim</label><input class="form-input" type="date" id="dlEnd" value="${Utils.getTodayDate()}"></div>
+                        <div class="form-group"><label class="form-label">Timeframe</label><select class="form-select" id="dlTimeframe"><option value="daily">Diário</option><option value="intraday">Intraday (1h)</option></select></div>
+                        <div class="form-group" style="justify-content:flex-end"><label class="form-label">&nbsp;</label><button class="btn btn-primary" id="btnDownload" onclick="App._downloadData()"><i class="fas fa-download"></i> Baixar</button></div>
+                    </div>
+                    <div id="dlValidation" style="margin-top:4px;font-size:12px;min-height:20px"></div>
+                    <div id="dlResult" style="margin-top:8px"></div>
+                </div>
+            </div>
+
+            <!-- Assets -->
+            <div class="card" style="grid-column:1/-1">
+                <div class="card-header"><span class="card-title"><i class="fas fa-list"></i> Ativos Armazenados (${assets.length})</span>
+                    <div class="card-actions"><button class="btn btn-ghost btn-sm" onclick="App._refreshConfig()"><i class="fas fa-refresh"></i></button></div></div>
+                <div class="card-body no-padding"><div class="table-container" style="max-height:400px"><table class="data-table"><thead><tr><th>Ticker</th><th>Daily</th><th>Intraday</th><th>Atualização</th><th>Ações</th></tr></thead><tbody>${assetRows}</tbody></table></div></div>
+            </div>
+
+            <!-- Change PIN -->
+            <div class="card">
+                <div class="card-header"><span class="card-title"><i class="fas fa-key"></i> Alterar PIN</span></div>
+                <div class="card-body">
+                    <div class="filter-bar" style="flex-direction:column;align-items:stretch">
+                        <div class="form-group"><label class="form-label">PIN Atual</label><input class="form-input" type="password" id="oldPin"></div>
+                        <div class="form-group"><label class="form-label">Novo PIN</label><input class="form-input" type="password" id="newPin"></div>
+                        <button class="btn btn-secondary" onclick="App._changePin()"><i class="fas fa-key"></i> Alterar</button>
+                    </div>
+                    <div id="pinChangeResult" style="margin-top:8px"></div>
+                </div>
+            </div>
+
+            <!-- Logout -->
+            <div class="card">
+                <div class="card-header"><span class="card-title"><i class="fas fa-sign-out-alt"></i> Sessão</span></div>
+                <div class="card-body">
+                    <p style="color:var(--text-muted);font-size:13px;margin-bottom:1rem">Ao sair, o PIN será esquecido.</p>
+                    <button class="btn btn-ghost" style="width:100%;color:var(--red-primary);border-color:var(--red-primary)" onclick="App._logout()"><i class="fas fa-sign-out-alt"></i> Sair</button>
+                </div>
+            </div>
+        </div>`;
     }
 
-    // ============================================================
-    // CONFIG ACTIONS
-    // ============================================================
-
-    let _tickerValidateTimeout = null;
-
-    function onTickerInput() {
-        const input = document.getElementById('dlTicker');
-        const validation = document.getElementById('dlTickerValidation');
-        const ticker = input.value.toUpperCase().trim();
-
-        if (_tickerValidateTimeout) clearTimeout(_tickerValidateTimeout);
-
-        if (ticker.length < 3) {
-            validation.innerHTML = '';
-            validation.className = 'ticker-validation';
-            return;
-        }
-
-        validation.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Validando...';
-        validation.className = 'ticker-validation loading';
-
-        _tickerValidateTimeout = setTimeout(async () => {
+    // Config actions
+    let _vlTimeout = null;
+    function _validateTicker() {
+        const el = document.getElementById('dlValidation');
+        const ticker = document.getElementById('dlTicker').value.toUpperCase().trim();
+        if (_vlTimeout) clearTimeout(_vlTimeout);
+        if (ticker.length < 3) { el.innerHTML = ''; return; }
+        el.innerHTML = '<span style="color:var(--text-muted)"><i class="fas fa-spinner fa-spin"></i> Validando...</span>';
+        _vlTimeout = setTimeout(async () => {
             try {
-                const result = await API.validateTicker(ticker, configPin);
-                if (result.valid) {
-                    validation.innerHTML = `<i class="fas fa-check-circle"></i> ${result.name || ticker} — R$ ${result.last_price}`;
-                    validation.className = 'ticker-validation valid';
-                } else {
-                    validation.innerHTML = '<i class="fas fa-times-circle"></i> Ticker inválido ou sem dados';
-                    validation.className = 'ticker-validation invalid';
-                }
-            } catch {
-                validation.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Erro ao validar';
-                validation.className = 'ticker-validation invalid';
-            }
+                const r = await API.validateTicker(ticker);
+                if (r.valid) el.innerHTML = `<span class="positive"><i class="fas fa-check-circle"></i> ${r.name||ticker} — R$ ${r.last_price||'?'}</span>`;
+                else el.innerHTML = '<span class="negative"><i class="fas fa-times-circle"></i> Ticker inválido</span>';
+            } catch { el.innerHTML = '<span class="negative"><i class="fas fa-exclamation-triangle"></i> Erro</span>'; }
         }, 800);
     }
 
-    async function downloadData() {
+    async function _downloadData() {
         const ticker = document.getElementById('dlTicker').value.toUpperCase().trim();
-        const startDate = document.getElementById('dlStartDate').value;
-        const endDate = document.getElementById('dlEndDate').value;
-        const timeframe = document.getElementById('dlTimeframe').value;
-        const result = document.getElementById('dlResult');
+        const start = document.getElementById('dlStart').value;
+        const end = document.getElementById('dlEnd').value;
+        const tf = document.getElementById('dlTimeframe').value;
+        const res = document.getElementById('dlResult');
         const btn = document.getElementById('btnDownload');
-
         if (!ticker) { Utils.showToast('Digite um ticker', 'warning'); return; }
-        if (!startDate || !endDate) { Utils.showToast('Selecione as datas', 'warning'); return; }
-
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Baixando...';
-        result.innerHTML = '';
-
+        btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Baixando...';
+        res.innerHTML = '';
         try {
-            const data = await API.downloadData(ticker, startDate, endDate, timeframe, configPin);
-            if (data.success) {
-                result.innerHTML = `<p style="color:var(--success);margin-top:0.5rem"><i class="fas fa-check-circle"></i> ${data.message} (${data.execution_time}s)</p>`;
-                Utils.showToast(`${ticker}: ${data.records} registros baixados`, 'success');
-                refreshConfig();
+            const data = await API.downloadData(configPin, ticker, start, end, tf);
+            if (data.success !== false) {
+                res.innerHTML = `<span class="positive"><i class="fas fa-check-circle"></i> ${data.message || 'Sucesso'} — ${data.records||0} registros</span>`;
+                Utils.showToast(`${ticker}: dados baixados`, 'success');
+                _refreshConfig();
                 updateStorageIndicator();
-            } else {
-                result.innerHTML = `<p style="color:var(--danger);margin-top:0.5rem"><i class="fas fa-times-circle"></i> ${data.message}</p>`;
-            }
-        } catch (e) {
-            result.innerHTML = `<p style="color:var(--danger);margin-top:0.5rem"><i class="fas fa-times-circle"></i> Erro: ${e.message}</p>`;
-        }
-
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-download"></i> Baixar Dados';
+            } else { res.innerHTML = `<span class="negative"><i class="fas fa-times-circle"></i> ${data.message||'Erro'}</span>`; }
+        } catch (e) { res.innerHTML = `<span class="negative"><i class="fas fa-times-circle"></i> ${e.message}</span>`; }
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-download"></i> Baixar';
     }
 
-    async function manualUpdate() {
+    async function _manualUpdate() {
         const btn = document.getElementById('btnManualUpdate');
-        const result = document.getElementById('updateResult');
-
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Atualizando todos os ativos...';
-        result.innerHTML = '';
-
+        const res = document.getElementById('updateResult');
+        btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Atualizando...';
         try {
             const data = await API.manualUpdate(configPin);
-            result.innerHTML = `<p style="color:var(--success)"><i class="fas fa-check-circle"></i> Atualização concluída: ${data.updated} atualizados, ${data.errors} erros (${data.execution_time}s)</p>`;
+            res.innerHTML = `<span class="positive"><i class="fas fa-check-circle"></i> ${data.updated||0} atualizados, ${data.errors||0} erros</span>`;
             Utils.showToast('Atualização concluída', 'success');
-            refreshConfig();
-            updateStorageIndicator();
-        } catch (e) {
-            result.innerHTML = `<p style="color:var(--danger)"><i class="fas fa-times-circle"></i> Erro: ${e.message}</p>`;
-        }
-
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-sync-alt"></i> Atualizar Todos os Ativos Agora';
+            _refreshConfig(); updateStorageIndicator();
+        } catch (e) { res.innerHTML = `<span class="negative">${e.message}</span>`; }
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Atualizar Tudo Agora';
     }
 
-    async function deleteAsset(ticker) {
-        if (!confirm(`Remover todos os dados de ${ticker}? Esta ação não pode ser desfeita.`)) return;
-
+    async function _deleteAsset(ticker) {
+        if (!confirm(`Remover ${ticker} e todos os dados?`)) return;
         try {
             await API.deleteAsset(ticker, configPin);
             Utils.showToast(`${ticker} removido`, 'success');
-            refreshConfig();
-            updateStorageIndicator();
-        } catch (e) {
-            Utils.showToast('Erro: ' + e.message, 'error');
-        }
+            _refreshConfig(); updateStorageIndicator();
+        } catch (e) { Utils.showToast('Erro: ' + e.message, 'error'); }
     }
 
-    async function changePin() {
-        const oldPin = document.getElementById('oldPin').value;
-        const newPin = document.getElementById('newPin').value;
-        const result = document.getElementById('pinChangeResult');
-
-        if (!oldPin || !newPin) { Utils.showToast('Preencha os dois campos', 'warning'); return; }
-        if (newPin.length < 4) { Utils.showToast('PIN deve ter pelo menos 4 caracteres', 'warning'); return; }
-
+    async function _changePin() {
+        const old = document.getElementById('oldPin').value.trim();
+        const nw = document.getElementById('newPin').value.trim();
+        const res = document.getElementById('pinChangeResult');
+        if (!old || !nw) { res.innerHTML = '<span class="negative">Preencha ambos os campos</span>'; return; }
         try {
-            await API.changePin(oldPin, newPin);
-            configPin = newPin;
-            result.innerHTML = '<p style="color:var(--success)"><i class="fas fa-check-circle"></i> PIN alterado com sucesso!</p>';
+            await API.changePin(old, nw);
+            configPin = nw;
+            res.innerHTML = '<span class="positive"><i class="fas fa-check-circle"></i> PIN alterado!</span>';
             document.getElementById('oldPin').value = '';
             document.getElementById('newPin').value = '';
-            Utils.showToast('PIN alterado', 'success');
-        } catch (e) {
-            result.innerHTML = `<p style="color:var(--danger)"><i class="fas fa-times-circle"></i> ${e.message}</p>`;
-        }
+        } catch (e) { res.innerHTML = `<span class="negative">${e.message}</span>`; }
     }
 
-    function logoutConfig() {
+    function _logout() {
         configPin = null;
         renderConfig();
     }
 
-    function refreshConfig() {
-        if (configPin) renderConfigPanel(document.getElementById('pageContent'));
-    }
-
-    // ============================================================
-    // HELPERS
-    // ============================================================
-
-    function renderStatCard(title, value, icon, color) {
-        return `
-            <div class="stat-card">
-                <div class="stat-icon" style="color:${color}"><i class="${icon}"></i></div>
-                <div class="stat-info">
-                    <span class="stat-value" style="color:${color}">${value}</span>
-                    <span class="stat-label">${title}</span>
-                </div>
-            </div>
-        `;
-    }
-
-    function renderStatCardSkeleton(count) {
-        let html = '';
-        for (let i = 0; i < count; i++) {
-            html += '<div class="stat-card skeleton" style="height:80px"></div>';
-        }
-        return html;
-    }
-
-    function getTodayDate() {
-        return new Date().toISOString().split('T')[0];
-    }
-
-    function getDefaultStartDate() {
-        const d = new Date();
-        d.setFullYear(d.getFullYear() - 1);
-        return d.toISOString().split('T')[0];
+    function _refreshConfig() {
+        renderConfigPanel(document.getElementById('pageContent'));
     }
 
     // ============================================================
     // PUBLIC API
     // ============================================================
 
-    document.addEventListener('DOMContentLoaded', init);
-
     return {
-        navigate,
-        runBulk,
-        runSingle,
-        runAndSave,
-        runCompare,
-        submitPin,
-        downloadData,
-        manualUpdate,
-        deleteAsset,
-        changePin,
-        logoutConfig,
-        refreshConfig,
-        onTickerInput,
-        viewSavedBt,
-        deleteSavedBt,
-        _switchBtTab,
+        init, navigate,
+        _switchBtTab: () => {}, // deprecated
+        _submitPin, _viewBt, _delBt,
+        _validateTicker, _downloadData, _manualUpdate,
+        _deleteAsset, _changePin, _logout, _refreshConfig,
     };
 })();
+
+// Init on load
+document.addEventListener('DOMContentLoaded', App.init);
