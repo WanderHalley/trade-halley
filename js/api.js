@@ -1,60 +1,81 @@
-// ═══════════════════════════════════════════════
-// Trade Halley - API Layer
-// ═══════════════════════════════════════════════
+/**
+ * Trade Halley - API Client
+ * Comunicação com o backend FastAPI
+ */
 
-// Configurar URL da API (Hugging Face Spaces)
-const API_BASE = 'https://Wanderhalleylee-trade-halley.hf.space';
-// Para desenvolvimento local: const API_BASE = 'http://localhost:7860';
+const API = (() => {
+  // ==============================================
+  // ALTERE AQUI PARA SUA URL DO HUGGING FACE
+  // ==============================================
+  const BASE_URL = 'https://SEU-USUARIO-trade-halley-api.hf.space';
 
-const TradeHalleyAPI = {
-    
-    async getStocks(type = 0) {
-        try {
-            const res = await fetch(`${API_BASE}/api/stocks?type=${type}`);
-            if (!res.ok) throw new Error('Erro ao buscar ativos');
-            return await res.json();
-        } catch (e) {
-            console.error('API Error:', e);
-            toastr.error('Erro ao conectar com o servidor. Verifique se a API está ativa.');
-            return { stocks: [] };
-        }
-    },
+  async function request(endpoint, params = {}) {
+    const url = new URL(`${BASE_URL}${endpoint}`);
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && value !== '') {
+        url.searchParams.append(key, value);
+      }
+    });
 
-    async runBacktest(params) {
-        try {
-            const res = await fetch(`${API_BASE}/api/backtest`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(params)
-            });
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || 'Erro no backtest');
-            }
-            return await res.json();
-        } catch (e) {
-            console.error('Backtest Error:', e);
-            toastr.error(e.message || 'Erro ao executar backtest');
-            return null;
-        }
-    },
+    try {
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
 
-    async runDetailedBacktest(symbol, params) {
-        try {
-            const res = await fetch(`${API_BASE}/api/backtest/${symbol}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(params)
-            });
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || 'Erro no backtest');
-            }
-            return await res.json();
-        } catch (e) {
-            console.error('Detail Error:', e);
-            toastr.error(e.message);
-            return null;
-        }
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.detail || `Erro ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error(`API Error [${endpoint}]:`, error);
+      throw error;
     }
-};
+  }
+
+  return {
+    // Status
+    health: () => request('/health'),
+
+    // Ativos
+    getAssets: (market = 'all') => request('/assets', { market }),
+    getAssetInfo: (ticker) => request(`/asset/${ticker}`),
+
+    // Dados de Mercado
+    getMarketData: (ticker, period = '6mo', interval = '1d') =>
+      request(`/market-data/${ticker}`, { period, interval }),
+
+    // Estratégias
+    getStrategies: () => request('/strategies'),
+
+    // Back-test individual
+    runBacktest: (ticker, strategy, options = {}) =>
+      request('/backtest', {
+        ticker,
+        strategy,
+        period: options.period || '1y',
+        interval: options.interval || '1d',
+        capital: options.capital || 10000,
+        stop_loss: options.stopLoss || null,
+        take_profit: options.takeProfit || null,
+      }),
+
+    // Back-test em massa
+    runBulkBacktest: (market, strategy, options = {}) =>
+      request('/backtest/bulk', {
+        market,
+        strategy,
+        period: options.period || '1y',
+        interval: options.interval || '1d',
+        capital: options.capital || 10000,
+      }),
+
+    // Dashboard
+    getDashboardSummary: () => request('/dashboard/summary'),
+
+    // Utilitário
+    getBaseUrl: () => BASE_URL,
+  };
+})();
