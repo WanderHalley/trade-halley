@@ -14,111 +14,47 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay active">
-        <div class="loading-spinner">
-            <div class="spinner"></div>
-            <p class="loading-text">Carregando Trade Halley...</p>
-        </div>
+        <div class="loading-spinner"><div class="spinner"></div><p class="loading-text">Carregando Trade Halley...</p></div>
     </div>
-
-    <!-- Toast Container -->
     <div id="toastContainer" class="toast-container"></div>
-
-    <!-- Sidebar Overlay (mobile) -->
     <div id="sidebarOverlay" class="sidebar-overlay"></div>
 
-    <!-- Sidebar -->
     <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
-            <div class="sidebar-logo">
-                <div class="logo-icon">TH</div>
-                <span class="logo-text">Trade Halley</span>
-            </div>
-            <button id="sidebarClose" class="menu-toggle" style="display:none">
-                <i class="fas fa-times"></i>
-            </button>
+            <div class="sidebar-logo"><div class="logo-icon">TH</div><span class="logo-text">Trade Halley</span></div>
+            <button id="sidebarClose" class="menu-toggle" style="display:none"><i class="fas fa-times"></i></button>
         </div>
-
         <nav class="sidebar-nav">
             <div class="nav-section">
                 <div class="nav-section-title">Principal</div>
-                <a href="#" class="nav-item active" data-page="dashboard">
-                    <i class="fas fa-tachometer-alt"></i>
-                    <span>Dashboard</span>
-                </a>
+                <a href="#" class="nav-item active" data-page="dashboard"><i class="fas fa-tachometer-alt"></i><span>Dashboard</span></a>
             </div>
-
             <div class="nav-section">
                 <div class="nav-section-title">Back-Tests</div>
-                <a href="#" class="nav-item" data-page="b3-daily">
-                    <i class="fas fa-chart-bar"></i>
-                    <span>B3 Daily</span>
-                </a>
-                <a href="#" class="nav-item" data-page="b3-intraday">
-                    <i class="fas fa-chart-area"></i>
-                    <span>B3 Intraday</span>
-                </a>
-                <a href="#" class="nav-item" data-page="bmf-intraday">
-                    <i class="fas fa-exchange-alt"></i>
-                    <span>BMF Intraday</span>
-                </a>
+                <a href="#" class="nav-item" data-page="b3-daily"><i class="fas fa-chart-bar"></i><span>B3 Daily</span></a>
+                <a href="#" class="nav-item" data-page="b3-intraday"><i class="fas fa-chart-area"></i><span>B3 Intraday</span></a>
+                <a href="#" class="nav-item" data-page="bmf-intraday"><i class="fas fa-exchange-alt"></i><span>BMF Intraday</span></a>
             </div>
-
             <div class="nav-section">
                 <div class="nav-section-title">Gestão</div>
-                <a href="#" class="nav-item" data-page="strategies">
-                    <i class="fas fa-brain"></i>
-                    <span>Estratégias</span>
-                </a>
-                <a href="#" class="nav-item" data-page="saved-backtests">
-                    <i class="fas fa-save"></i>
-                    <span>Backtests Salvos</span>
-                </a>
-                <a href="#" class="nav-item" data-page="config">
-                    <i class="fas fa-cog"></i>
-                    <span>Configurações</span>
-                </a>
-            </div>
-
-            <div class="nav-section">
-                <div class="nav-section-title">Links</div>
-                <a href="https://github.com/WanderHalley" class="nav-item" target="_blank">
-                    <i class="fab fa-github"></i>
-                    <span>GitHub</span>
-                </a>
+                <a href="#" class="nav-item" data-page="strategies"><i class="fas fa-brain"></i><span>Estratégias</span></a>
+                <a href="#" class="nav-item" data-page="saved-backtests"><i class="fas fa-save"></i><span>Backtests Salvos</span></a>
+                <a href="#" class="nav-item" data-page="config"><i class="fas fa-cog"></i><span>Configurações</span></a>
             </div>
         </nav>
-
         <div class="sidebar-footer">
-            <div class="storage-indicator" id="storageIndicator">
-                <i class="fas fa-database"></i>
-                <span id="storageText">Carregando...</span>
-            </div>
+            <div class="storage-indicator" id="storageIndicator"><i class="fas fa-database"></i><span id="storageText">Carregando...</span></div>
             <div class="version">Trade Halley v2.0</div>
         </div>
     </aside>
 
-    <!-- Main Content -->
     <main class="main-content">
         <header class="top-header">
-            <div class="header-left">
-                <button id="menuToggle" class="menu-toggle">
-                    <i class="fas fa-bars"></i>
-                </button>
-                <h1 class="page-title" id="pageTitle">Dashboard</h1>
-            </div>
-            <div class="header-right">
-                <div class="market-status" id="marketStatus">
-                    <span class="status-dot"></span>
-                    <span>Verificando...</span>
-                </div>
-            </div>
+            <div class="header-left"><button id="menuToggle" class="menu-toggle"><i class="fas fa-bars"></i></button><h1 class="page-title" id="pageTitle">Dashboard</h1></div>
+            <div class="header-right"><div class="market-status" id="marketStatus"><span class="status-dot"></span><span>Verificando...</span></div></div>
         </header>
-
-        <div id="pageContent" class="page-content">
-            <!-- Conteúdo dinâmico -->
-        </div>
+        <div id="pageContent" class="page-content"></div>
     </main>
 
     <script src="js/utils.js"></script>
