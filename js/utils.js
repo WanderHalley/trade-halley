@@ -1,42 +1,37 @@
 /**
- * Trade Halley - Utilitários v3.0
+ * Utils — Trade Halley v2.1
  */
 const Utils = (() => {
-    function formatCurrency(value, currency = 'BRL') {
-        return new Intl.NumberFormat('pt-BR', {
-            style: 'currency', currency, minimumFractionDigits: 2,
-        }).format(value);
+    function formatCurrency(value) {
+        if (value == null || isNaN(value)) return 'R$ --';
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
     }
 
     function formatNumber(value, decimals = 2) {
-        return new Intl.NumberFormat('pt-BR', {
-            minimumFractionDigits: decimals, maximumFractionDigits: decimals,
-        }).format(value);
+        if (value == null || isNaN(value)) return '--';
+        return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value);
     }
 
     function formatPercent(value) {
-        const sign = value > 0 ? '+' : '';
-        return `${sign}${formatNumber(value)}%`;
+        if (value == null || isNaN(value)) return '--';
+        const sign = value >= 0 ? '+' : '';
+        return `${sign}${value.toFixed(2)}%`;
     }
 
     function formatVolume(value) {
-        if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
-        if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
-        if (value >= 1e3) return `${(value / 1e3).toFixed(1)}K`;
+        if (value == null || isNaN(value)) return '--';
+        if (value >= 1e9) return (value / 1e9).toFixed(1) + 'B';
+        if (value >= 1e6) return (value / 1e6).toFixed(1) + 'M';
+        if (value >= 1e3) return (value / 1e3).toFixed(1) + 'K';
         return value.toString();
     }
 
     function formatDate(dateStr) {
-        return new Date(dateStr).toLocaleDateString('pt-BR', {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-        });
-    }
-
-    function formatDateTime(dateStr) {
-        return new Date(dateStr).toLocaleString('pt-BR', {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-            hour: '2-digit', minute: '2-digit',
-        });
+        if (!dateStr) return '--';
+        try {
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('pt-BR');
+        } catch { return dateStr; }
     }
 
     function getTodayDate() {
@@ -45,47 +40,38 @@ const Utils = (() => {
 
     function getDefaultStartDate() {
         const d = new Date();
-        d.setFullYear(d.getFullYear() - 2);
+        d.setMonth(d.getMonth() - 3);
         return d.toISOString().split('T')[0];
     }
 
     function isMarketOpen() {
         const now = new Date();
-        const brTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-        const day = brTime.getDay();
-        const totalMin = brTime.getHours() * 60 + brTime.getMinutes();
-        return day >= 1 && day <= 5 && totalMin >= 600 && totalMin <= 1020;
+        const brt = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+        const day = brt.getDay();
+        const hour = brt.getHours();
+        const min = brt.getMinutes();
+        const time = hour * 60 + min;
+        return day >= 1 && day <= 5 && time >= 600 && time <= 1055;
     }
 
-    function debounce(fn, delay = 300) {
-        let timer;
-        return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
-    }
-
-    function showToast(message, type = 'success', duration = 4000) {
+    function showToast(message, type = 'info') {
         const container = document.getElementById('toastContainer');
         if (!container) return;
-        const icons = {
-            success: 'fas fa-check-circle',
-            error: 'fas fa-exclamation-circle',
-            warning: 'fas fa-exclamation-triangle',
-            info: 'fas fa-info-circle',
-        };
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
-        toast.innerHTML = `<i class="${icons[type] || icons.success}"></i><span>${message}</span>`;
+        toast.textContent = message;
         container.appendChild(toast);
         setTimeout(() => {
             toast.style.opacity = '0';
-            toast.style.transform = 'translateX(100px)';
-            toast.style.transition = 'all 0.3s ease';
+            toast.style.transition = 'opacity .3s';
             setTimeout(() => toast.remove(), 300);
-        }, duration);
+        }, 3500);
     }
 
-    return {
-        formatCurrency, formatNumber, formatPercent, formatVolume,
-        formatDate, formatDateTime, getTodayDate, getDefaultStartDate,
-        isMarketOpen, debounce, showToast,
-    };
+    function debounce(fn, ms = 300) {
+        let timer;
+        return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
+    }
+
+    return { formatCurrency, formatNumber, formatPercent, formatVolume, formatDate, getTodayDate, getDefaultStartDate, isMarketOpen, showToast, debounce };
 })();
