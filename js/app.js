@@ -1,541 +1,1038 @@
 /**
- * Trade Halley — App Principal v2.1
- * SPA completo
+ * Trade Halley - Frontend App v2.2
+ * SPA com navegação, dashboard, backtest, estratégias e configurações
  */
-const App = (() => {
-    let currentPage = 'dashboard';
-    let cachedStrategies = null;
-    let configPin = null;
 
-    /* ═══════════ INIT ═══════════ */
+const APP = {
+    API_BASE: 'https://wanderhalleylee-trade-halley.hf.space',
+    BRAPI_BASE: 'https://brapi.dev/api',
+    BRAPI_TOKEN: 'ktC3hLVgH3QXrFnssfbcUj',
+    pin: null,
+    currentPage: 'dashboard',
+    charts: {},
+};
 
-    function init() {
-        setupNavigation();
-        setupMobileMenu();
-        updateMarketStatus();
-        updateStorageIndicator();
-        navigateTo('dashboard');
-        setInterval(updateMarketStatus, 60000);
-    }
+// ═══════════════════════════════════════════
+// API HELPER
+// ═══════════════════════════════════════════
 
-    function setupNavigation() {
-        document.querySelectorAll('.nav-item[data-page]').forEach(item => {
-            item.addEventListener('click', e => {
-                e.preventDefault();
-                navigateTo(item.dataset.page);
+const API = {
+    async get(endpoint) {
+        try {
+            const resp = await fetch(`${APP.API_BASE}${endpoint}`);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            return await resp.json();
+        } catch (e) {
+            console.error(`API GET ${endpoint}:`, e);
+            return null;
+        }
+    },
+
+    async post(endpoint, body) {
+        try {
+            const resp = await fetch(`${APP.API_BASE}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
             });
-        });
-    }
-
-    function setupMobileMenu() {
-        const toggle = document.getElementById('menuToggle');
-        const sidebar = document.getElementById('sidebar');
-        const close = document.getElementById('sidebarClose');
-        if (toggle) toggle.addEventListener('click', () => sidebar.classList.toggle('open'));
-        if (close) close.addEventListener('click', () => sidebar.classList.remove('open'));
-    }
-
-    function navigateTo(page) {
-        currentPage = page;
-        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-        const a = document.querySelector(`.nav-item[data-page="${page}"]`);
-        if (a) a.classList.add('active');
-        document.getElementById('sidebar')?.classList.remove('open');
-        Charts.destroyAll();
-
-        const map = {
-            dashboard:   ['Dashboard','Visão geral do mercado'],
-            b3daily:     ['B3 Daily','Backtest — ações B3 (diário)'],
-            b3intraday:  ['B3 Intraday','Backtest — ações B3 (intraday)'],
-            bmfintraday: ['BMF Intraday','Backtest — futuros BMF (intraday)'],
-            strategies:  ['Estratégias','Gerenciar estratégias por timeframe'],
-            saved:       ['Backtests Salvos','Histórico de backtests salvos'],
-            config:      ['Configurações','Gerenciar dados e configurações'],
-        };
-        const [t, s] = map[page] || ['Trade Halley',''];
-        document.getElementById('pageTitle').textContent = t;
-        document.getElementById('pageSubtitle').textContent = s;
-
-        switch (page) {
-            case 'dashboard':   renderDashboard(); break;
-            case 'b3daily':     renderBacktestPage('b3','1d'); break;
-            case 'b3intraday':  renderBacktestPage('b3','1h'); break;
-            case 'bmfintraday': renderBacktestPage('bmf','1h'); break;
-            case 'strategies':  renderStrategiesPage(); break;
-            case 'saved':       renderSavedPage(); break;
-            case 'config':      renderConfigPage(); break;
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            return await resp.json();
+        } catch (e) {
+            console.error(`API POST ${endpoint}:`, e);
+            return null;
         }
-    }
+    },
 
-    /* ═══════════ MARKET STATUS & STORAGE ═══════════ */
-
-    function updateMarketStatus() {
-        const el = document.getElementById('marketStatus');
-        if (!el) return;
-        const open = Utils.isMarketOpen();
-        el.innerHTML = `<span class="status-dot ${open?'status-open':'status-closed'}"></span><span class="status-text">${open?'Mercado Aberto':'Mercado Fechado'}</span>`;
-    }
-
-    async function updateStorageIndicator() {
+    async del(endpoint) {
         try {
-            const s = await API.getStorageStats();
-            const el = document.getElementById('storageCount');
-            if (el) el.textContent = s.total_assets || 0;
-        } catch (_) {}
+            const resp = await fetch(`${APP.API_BASE}${endpoint}`, { method: 'DELETE' });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            return await resp.json();
+        } catch (e) {
+            console.error(`API DELETE ${endpoint}:`, e);
+            return null;
+        }
+    },
+
+    // Direct brapi call (one ticker at a time, free plan)
+    async brapiQuote(ticker) {
+        try {
+            const url = `${APP.BRAPI_BASE}/quote/${encodeURIComponent(ticker)}?token=${APP.BRAPI_TOKEN}`;
+            const resp = await fetch(url);
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            return data.results && data.results[0] ? data.results[0] : null;
+        } catch (e) {
+            console.error(`brapi quote ${ticker}:`, e);
+            return null;
+        }
+    },
+
+    async brapiHistory(ticker, range = '3mo', interval = '1d') {
+        try {
+            const url = `${APP.BRAPI_BASE}/quote/${encodeURIComponent(ticker)}?range=${range}&interval=${interval}&token=${APP.BRAPI_TOKEN}`;
+            const resp = await fetch(url);
+            if (!resp.ok) return [];
+            const data = await resp.json();
+            const r = data.results && data.results[0];
+            return r ? (r.historicalDataPrice || []) : [];
+        } catch (e) {
+            console.error(`brapi history ${ticker}:`, e);
+            return [];
+        }
+    },
+};
+
+// ═══════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════
+
+function navigate(page) {
+    APP.currentPage = page;
+
+    // Update sidebar active
+    document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+    const activeLink = document.querySelector(`.nav-link[data-page="${page}"]`);
+    if (activeLink) activeLink.classList.add('active');
+
+    // Render page
+    const content = document.getElementById('main-content');
+    if (!content) return;
+
+    switch (page) {
+        case 'dashboard': renderDashboard(); break;
+        case 'backtest': renderBacktest(); break;
+        case 'bulk': renderBulk(); break;
+        case 'compare': renderCompare(); break;
+        case 'strategies': renderStrategies(); break;
+        case 'saved': renderSaved(); break;
+        case 'config': renderConfig(); break;
+        default: renderDashboard();
     }
+}
 
-    /* ═══════════ DASHBOARD ═══════════ */
+// ═══════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════
 
-    async function renderDashboard() {
-        const c = document.getElementById('pageContent');
-        c.innerHTML = `
-            <div class="dashboard-grid">
-                <div class="stat-card"><div class="stat-label"><i class="fas fa-chart-line"></i> IBOVESPA</div><div class="stat-value" id="vIBOV">--</div><div class="stat-change" id="cIBOV">--</div></div>
-                <div class="stat-card"><div class="stat-label"><i class="fas fa-dollar-sign"></i> Dólar (USD/BRL)</div><div class="stat-value" id="vDOL">--</div><div class="stat-change" id="cDOL">--</div></div>
-                <div class="stat-card"><div class="stat-label"><i class="fas fa-layer-group"></i> BOVA11</div><div class="stat-value" id="vBOVA">--</div><div class="stat-change" id="cBOVA">--</div></div>
-                <div class="stat-card"><div class="stat-label"><i class="fas fa-database"></i> Ativos Cadastrados</div><div class="stat-value" id="vSTO">--</div><div class="stat-change" id="cSTO">Supabase</div></div>
-            </div>
-            <div class="charts-section">
-                <div class="chart-container"><h3><i class="fas fa-chart-area"></i> Gráfico de Referência — 3 meses</h3><canvas id="chRef"></canvas><p class="chart-note" id="nRef"></p></div>
-                <div class="chart-container"><h3><i class="fas fa-chart-area"></i> Dólar / Referência — 3 meses</h3><canvas id="chDol"></canvas><p class="chart-note" id="nDol"></p></div>
-            </div>
-            <div class="market-table-section">
-                <h3><i class="fas fa-table"></i> Cotações em Tempo Real (brapi.dev)</h3>
-                <div class="table-responsive">
-                    <table class="data-table"><thead><tr><th>Ativo</th><th>Nome</th><th>Preço</th><th>Variação</th><th>Volume</th></tr></thead>
-                    <tbody id="mktBody"><tr><td colspan="5" class="loading-cell">Carregando cotações...</td></tr></tbody></table>
+function fmt(n, decimals = 2) {
+    if (n == null || isNaN(n)) return '—';
+    return Number(n).toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
+function fmtCurrency(n) {
+    if (n == null || isNaN(n)) return '—';
+    return 'R$ ' + fmt(n);
+}
+
+function fmtPct(n) {
+    if (n == null || isNaN(n)) return '—';
+    const sign = n >= 0 ? '+' : '';
+    return sign + fmt(n) + '%';
+}
+
+function changeColor(n) {
+    if (n == null) return '';
+    return n >= 0 ? 'text-success' : 'text-danger';
+}
+
+function destroyChart(id) {
+    if (APP.charts[id]) {
+        APP.charts[id].destroy();
+        delete APP.charts[id];
+    }
+}
+
+function showToast(msg, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type} alert-dismissible fade show`;
+    toast.role = 'alert';
+    toast.innerHTML = `${msg}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+}
+
+// ═══════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════
+
+async function renderDashboard() {
+    const content = document.getElementById('main-content');
+    content.innerHTML = `
+        <h2 class="mb-4"><i class="bi bi-speedometer2 me-2"></i>Dashboard</h2>
+        <div id="dash-cards" class="row g-3 mb-4">
+            <div class="col-12 text-center"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Carregando cotações...</p></div>
+        </div>
+        <div class="row g-3 mb-4">
+            <div class="col-md-8">
+                <div class="card shadow-sm">
+                    <div class="card-header"><h6 class="mb-0">PETR4 — Histórico (3 meses)</h6></div>
+                    <div class="card-body"><canvas id="chart-dash-main" height="300"></canvas></div>
                 </div>
-            </div>`;
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm">
+                    <div class="card-header"><h6 class="mb-0">Resumo</h6></div>
+                    <div class="card-body" id="dash-summary">Carregando...</div>
+                </div>
+            </div>
+        </div>
+        <div class="card shadow-sm">
+            <div class="card-header"><h6 class="mb-0">Mercado</h6></div>
+            <div class="card-body"><div class="table-responsive"><table class="table table-sm table-hover" id="dash-market-table"><tbody></tbody></table></div></div>
+        </div>
+    `;
 
-        // Fetch cards individually (safe for special chars)
-        _fetchCard('^BVSP', 'vIBOV', 'cIBOV', false, true);
-        _fetchCard('USDBRL=X', 'vDOL', 'cDOL', true, false);
-        _fetchCard('BOVA11', 'vBOVA', 'cBOVA', false, false);
-        _fetchStorage();
+    // Fetch dashboard quotes (one by one because free plan = 1 ticker/request)
+    const dashTickers = [
+        { label: 'IBOV', brapi: '^BVSP' },
+        { label: 'Dólar', brapi: 'USDBRL=X' },
+        { label: 'PETR4', brapi: 'PETR4' },
+        { label: 'VALE3', brapi: 'VALE3' },
+        { label: 'ITUB4', brapi: 'ITUB4' },
+        { label: 'BBDC4', brapi: 'BBDC4' },
+        { label: 'WEGE3', brapi: 'WEGE3' },
+        { label: 'BOVA11', brapi: 'BOVA11' },
+    ];
 
-        // Market table — fetch individually
-        const tickers = ['PETR4','VALE3','ITUB4','BBDC4','ABEV3','WEGE3','RENT3','BBAS3','PRIO3','SUZB3','MGLU3','HAPV3','JBSS3','GGBR4','B3SA3','BOVA11'];
-        _fetchMarketTable(tickers);
+    const quotes = [];
+    const fetches = dashTickers.map(async (t) => {
+        const q = await API.brapiQuote(t.brapi);
+        if (q) quotes.push({ ...t, data: q });
+    });
+    await Promise.all(fetches);
 
-        // Charts
-        _fetchChartRef();
-        _fetchChartDol();
-    }
-
-    async function _fetchCard(ticker, valId, chgId, isCurr, isBig) {
-        try {
-            const q = await API.brapiQuote(ticker);
-            if (!q) return;
-            const ve = document.getElementById(valId);
-            const ce = document.getElementById(chgId);
-            if (!ve) return;
-            if (isCurr) ve.textContent = 'R$ ' + q.regularMarketPrice.toFixed(4);
-            else if (isBig) ve.textContent = Utils.formatNumber(q.regularMarketPrice, 0);
-            else ve.textContent = Utils.formatCurrency(q.regularMarketPrice);
-            const p = q.regularMarketChangePercent || 0;
-            ce.textContent = (p >= 0 ? '+' : '') + p.toFixed(2) + '%';
-            ce.className = 'stat-change ' + (p >= 0 ? 'positive' : 'negative');
-        } catch (e) { console.warn('Card error ' + ticker, e); }
-    }
-
-    async function _fetchStorage() {
-        try {
-            const s = await API.getStorageStats();
-            const el = document.getElementById('vSTO');
-            if (el) el.textContent = s.total_assets || 0;
-            const sc = document.getElementById('storageCount');
-            if (sc) sc.textContent = s.total_assets || 0;
-        } catch (_) {
-            const el = document.getElementById('vSTO');
-            if (el) el.textContent = '0';
-        }
-    }
-
-    async function _fetchMarketTable(tickers) {
-        const tbody = document.getElementById('mktBody');
-        if (!tbody) return;
-        const quotes = await API.getDashboardQuotes(tickers);
-        if (quotes.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="loading-cell">Sem dados</td></tr>'; return; }
-        tbody.innerHTML = quotes.map(q => {
-            const p = q.regularMarketChangePercent || 0;
-            const cls = p >= 0 ? 'positive' : 'negative';
-            const arr = p >= 0 ? '▲' : '▼';
-            return `<tr><td><strong>${q.symbol}</strong></td><td>${q.shortName||q.symbol}</td><td>${Utils.formatCurrency(q.regularMarketPrice)}</td><td class="${cls}">${arr} ${p.toFixed(2)}%</td><td>${Utils.formatVolume(q.regularMarketVolume)}</td></tr>`;
+    // Render cards
+    const cardsDiv = document.getElementById('dash-cards');
+    if (quotes.length === 0) {
+        cardsDiv.innerHTML = '<div class="col-12"><div class="alert alert-warning">Não foi possível carregar cotações.</div></div>';
+    } else {
+        cardsDiv.innerHTML = quotes.map(q => {
+            const d = q.data;
+            const price = d.regularMarketPrice;
+            const change = d.regularMarketChange;
+            const changePct = d.regularMarketChangePercent;
+            const color = change >= 0 ? 'success' : 'danger';
+            const arrow = change >= 0 ? 'bi-arrow-up-short' : 'bi-arrow-down-short';
+            return `
+                <div class="col-6 col-md-3">
+                    <div class="card shadow-sm border-${color} border-start border-4">
+                        <div class="card-body py-2 px-3">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted fw-bold">${q.label}</small>
+                                <i class="bi ${arrow} text-${color} fs-5"></i>
+                            </div>
+                            <div class="fs-5 fw-bold">${fmt(price)}</div>
+                            <small class="text-${color}">${fmtPct(changePct)}</small>
+                        </div>
+                    </div>
+                </div>
+            `;
         }).join('');
     }
 
-    async function _fetchChartRef() {
-        try {
-            let d = await API.getHistoricalData('BOVA11', '3mo', '1d');
-            let lb = 'BOVA11';
-            if (!d || d.length === 0) {
-                d = await API.getHistoricalData('PETR4', '3mo', '1d');
-                lb = 'PETR4 (referência)';
-                const n = document.getElementById('nRef');
-                if (n) n.textContent = 'BOVA11 sem histórico no plano gratuito. Exibindo PETR4.';
-            }
-            if (d && d.length > 0) {
-                const labels = d.map(x => new Date(x.date * 1000).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }));
-                Charts.priceLine('chRef', labels, d.map(x => x.close), lb);
-            }
-        } catch (e) { console.warn('Chart ref error', e); }
+    // Summary
+    const summaryDiv = document.getElementById('dash-summary');
+    const summaryData = await API.get('/dashboard/summary');
+    if (summaryData) {
+        summaryDiv.innerHTML = `
+            <p><strong>Ativos B3:</strong> ${summaryData.total_b3}</p>
+            <p><strong>Ativos BMF:</strong> ${summaryData.total_bmf}</p>
+            <p><strong>Estratégias:</strong> ${summaryData.total_strategies}</p>
+            <hr>
+            <p class="text-muted small">Dados via brapi.dev (plano free: máx. 3 meses de histórico)</p>
+        `;
+    } else {
+        summaryDiv.innerHTML = '<p class="text-muted">Erro ao carregar resumo.</p>';
     }
 
-    async function _fetchChartDol() {
-        try {
-            let d = await API.getHistoricalData('USDBRL=X', '3mo', '1d');
-            let lb = 'USD/BRL';
-            if (!d || d.length === 0) {
-                d = await API.getHistoricalData('VALE3', '3mo', '1d');
-                lb = 'VALE3 (referência)';
-                const n = document.getElementById('nDol');
-                if (n) n.textContent = 'USD/BRL sem histórico no plano gratuito. Exibindo VALE3.';
-            }
-            if (d && d.length > 0) {
-                const labels = d.map(x => new Date(x.date * 1000).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }));
-                Charts.priceLine('chDol', labels, d.map(x => x.close), lb);
-            }
-        } catch (e) { console.warn('Chart dol error', e); }
-    }
+    // Chart - PETR4 historical
+    const hist = await API.brapiHistory('PETR4', '3mo', '1d');
+    destroyChart('chart-dash-main');
+    const canvas = document.getElementById('chart-dash-main');
+    if (canvas && hist.length > 0) {
+        const labels = hist.map(h => {
+            const d = new Date(h.date * 1000);
+            return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        });
+        const prices = hist.map(h => h.close);
 
-    /* ═══════════ BACKTEST PAGES ═══════════ */
-
-    async function renderBacktestPage(market, interval) {
-        const c = document.getElementById('pageContent');
-        const strats = await loadStrategies();
-        c.innerHTML = `<div class="backtest-page"><div class="tab-bar" style="margin-bottom:1.2rem">
-            <button class="tab-btn active" data-bt="single">Individual</button>
-            <button class="tab-btn" data-bt="bulk">Em Massa</button>
-            <button class="tab-btn" data-bt="compare">Comparar</button>
-        </div><div id="btContent"></div></div>`;
-        const render = tab => {
-            Charts.destroyAll();
-            const ct = document.getElementById('btContent');
-            if (tab==='single') renderSingle(ct, market, interval, strats);
-            else if (tab==='bulk') renderBulk(ct, market, interval, strats);
-            else renderCompare(ct, market, interval, strats);
-        };
-        c.querySelectorAll('.tab-btn[data-bt]').forEach(b => b.addEventListener('click', () => {
-            c.querySelectorAll('.tab-btn[data-bt]').forEach(x => x.classList.remove('active'));
-            b.classList.add('active');
-            render(b.dataset.bt);
-        }));
-        render('single');
-    }
-
-    async function loadStrategies() {
-        if (cachedStrategies) return cachedStrategies;
-        try { const r = await API.getStrategies(); cachedStrategies = r.strategies || []; }
-        catch (_) { cachedStrategies = []; }
-        return cachedStrategies;
-    }
-
-    function stratOpts(strats) { return strats.map(s => `<option value="${s.id}">${s.name} (${s.category})</option>`).join(''); }
-    function tickerInput(market) {
-        if (market === 'bmf') return `<select id="btTicker" class="form-input"><option value="IBOV_FUT">Mini Índice</option><option value="DOL_FUT">Mini Dólar</option><option value="SP500">S&P 500</option><option value="GOLD">Ouro</option><option value="CRUDE_OIL">Petróleo</option><option value="BITCOIN">Bitcoin</option></select>`;
-        return `<input type="text" id="btTicker" class="form-input" placeholder="Ex: PETR4" value="PETR4">`;
-    }
-
-    function renderSingle(ct, market, interval, strats) {
-        ct.innerHTML = `<div class="backtest-form"><div class="form-row">
-            <div class="form-group"><label>Ativo</label>${tickerInput(market)}</div>
-            <div class="form-group"><label>Estratégia</label><select id="btStrat" class="form-input">${stratOpts(strats)}</select></div>
-            <div class="form-group"><label>Período</label><select id="btPeriod" class="form-input"><option value="3mo">3 meses</option><option value="6mo">6 meses</option><option value="1y" selected>1 ano</option><option value="2y">2 anos</option></select></div>
-            <div class="form-group"><label>Capital</label><input type="number" id="btCap" class="form-input" value="10000" min="100"></div>
-        </div><div class="form-row">
-            <div class="form-group"><label>Stop Loss (%)</label><input type="number" id="btSL" class="form-input" placeholder="Ex: 5" step="0.1"></div>
-            <div class="form-group"><label>Take Profit (%)</label><input type="number" id="btTP" class="form-input" placeholder="Ex: 10" step="0.1"></div>
-            <div class="form-group form-action"><button class="btn btn-primary" id="btnRun"><i class="fas fa-play"></i> Executar</button></div>
-        </div></div><div id="btResult"></div>`;
-        document.getElementById('btnRun').addEventListener('click', async () => {
-            const ticker = document.getElementById('btTicker').value.trim().toUpperCase();
-            if (!ticker) { Utils.showToast('Informe o ticker','error'); return; }
-            const params = { ticker, strategy: document.getElementById('btStrat').value, period: document.getElementById('btPeriod').value, interval, capital: parseFloat(document.getElementById('btCap').value)||10000 };
-            const sl = parseFloat(document.getElementById('btSL').value); if (sl > 0) params.stop_loss = sl / 100;
-            const tp = parseFloat(document.getElementById('btTP').value); if (tp > 0) params.take_profit = tp / 100;
-            const rd = document.getElementById('btResult');
-            rd.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Executando backtest...</p></div>';
-            try { renderBtResult(rd, await API.runBacktest(params)); }
-            catch (e) { rd.innerHTML = `<div class="error-state"><i class="fas fa-exclamation-triangle"></i><p>${e.message}</p></div>`; }
+        APP.charts['chart-dash-main'] = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'PETR4 (Fechamento)',
+                    data: prices,
+                    borderColor: '#0d6efd',
+                    backgroundColor: 'rgba(13,110,253,0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0,
+                    borderWidth: 2,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => 'R$ ' + fmt(ctx.parsed.y),
+                        },
+                    },
+                },
+                scales: {
+                    x: { ticks: { maxTicksAutoSkip: true, maxRotation: 0 } },
+                    y: { ticks: { callback: v => 'R$ ' + v } },
+                },
+            },
         });
     }
 
-    function renderBulk(ct, market, interval, strats) {
-        ct.innerHTML = `<div class="backtest-form"><div class="form-row">
-            <div class="form-group"><label>Estratégia</label><select id="bkStrat" class="form-input">${stratOpts(strats)}</select></div>
-            <div class="form-group"><label>Período</label><select id="bkPeriod" class="form-input"><option value="3mo">3 meses</option><option value="6mo">6 meses</option><option value="1y" selected>1 ano</option></select></div>
-            <div class="form-group"><label>Capital</label><input type="number" id="bkCap" class="form-input" value="10000" min="100"></div>
-            <div class="form-group form-action"><button class="btn btn-primary" id="btnBulk"><i class="fas fa-play"></i> Em Massa</button></div>
-        </div></div><div id="bkResult"></div>`;
-        document.getElementById('btnBulk').addEventListener('click', async () => {
-            const rd = document.getElementById('bkResult');
-            rd.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Executando backtests em massa...</p></div>';
-            try {
-                const data = await API.runBulkBacktest({ market, strategy: document.getElementById('bkStrat').value, period: document.getElementById('bkPeriod').value, interval, capital: parseFloat(document.getElementById('bkCap').value)||10000 });
-                const rs = data.results || [];
-                if (!rs.length) { rd.innerHTML = '<p class="empty-state">Nenhum resultado.</p>'; return; }
-                rd.innerHTML = `<p class="result-summary">${data.total_tested} ativos testados</p><div class="table-responsive"><table class="data-table"><thead><tr><th>Ativo</th><th>Retorno</th><th>Capital Final</th><th>Trades</th><th>Win Rate</th><th>Drawdown</th></tr></thead><tbody>${rs.map(r => { const cl = (r.total_return_pct||0) >= 0 ? 'positive':'negative'; return `<tr><td><strong>${r.ticker}</strong></td><td class="${cl}">${Utils.formatPercent(r.total_return_pct)}</td><td>${Utils.formatCurrency(r.final_capital)}</td><td>${r.total_trades||0}</td><td>${Utils.formatPercent(r.win_rate)}</td><td class="negative">${Utils.formatPercent(r.max_drawdown)}</td></tr>`; }).join('')}</tbody></table></div>`;
-            } catch (e) { rd.innerHTML = `<div class="error-state"><i class="fas fa-exclamation-triangle"></i><p>${e.message}</p></div>`; }
+    // Market table
+    const tbody = document.querySelector('#dash-market-table tbody');
+    if (tbody && quotes.length > 0) {
+        tbody.innerHTML = quotes.map(q => {
+            const d = q.data;
+            const color = (d.regularMarketChange || 0) >= 0 ? 'text-success' : 'text-danger';
+            return `<tr>
+                <td class="fw-bold">${q.label}</td>
+                <td>${d.longName || d.shortName || '—'}</td>
+                <td class="text-end">${fmt(d.regularMarketPrice)}</td>
+                <td class="text-end ${color}">${fmtPct(d.regularMarketChangePercent)}</td>
+                <td class="text-end">${d.regularMarketVolume ? Number(d.regularMarketVolume).toLocaleString('pt-BR') : '—'}</td>
+            </tr>`;
+        }).join('');
+    }
+}
+
+// ═══════════════════════════════════════════
+// STRATEGIES LOADER (shared)
+// ═══════════════════════════════════════════
+
+async function loadStrategies(selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+
+    sel.innerHTML = '<option value="">Carregando...</option>';
+    const data = await API.get('/strategies');
+    if (!data || !data.strategies || data.strategies.length === 0) {
+        sel.innerHTML = '<option value="">Nenhuma estratégia</option>';
+        return;
+    }
+
+    sel.innerHTML = '<option value="">Selecione...</option>';
+    data.strategies.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = `${s.name} (${s.category})`;
+        sel.appendChild(opt);
+    });
+}
+
+async function loadTickers(selectId, market = 'b3') {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+
+    sel.innerHTML = '<option value="">Carregando...</option>';
+    const data = await API.get(`/assets?market=${market}`);
+    if (!data) {
+        sel.innerHTML = '<option value="">Erro</option>';
+        return;
+    }
+
+    sel.innerHTML = '<option value="">Selecione...</option>';
+    const list = data.b3 || data.bmf || [];
+    list.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a.ticker;
+        opt.textContent = a.ticker;
+        sel.appendChild(opt);
+    });
+}
+
+// ═══════════════════════════════════════════
+// BACKTEST — SINGLE
+// ═══════════════════════════════════════════
+
+async function renderBacktest() {
+    const content = document.getElementById('main-content');
+    content.innerHTML = `
+        <h2 class="mb-4"><i class="bi bi-graph-up me-2"></i>Backtest Individual</h2>
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Ativo</label>
+                        <select id="bt-ticker" class="form-select"></select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Estratégia</label>
+                        <select id="bt-strategy" class="form-select"></select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Período</label>
+                        <select id="bt-period" class="form-select">
+                            <option value="3mo">3 meses</option>
+                            <option value="6mo">6 meses</option>
+                            <option value="1y" selected>1 ano</option>
+                            <option value="2y">2 anos</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Capital</label>
+                        <input type="number" id="bt-capital" class="form-control" value="10000" min="100">
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button class="btn btn-primary w-100" onclick="runBacktest()"><i class="bi bi-play-fill me-1"></i>Executar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="bt-result"></div>
+    `;
+
+    await Promise.all([
+        loadTickers('bt-ticker', 'b3'),
+        loadStrategies('bt-strategy'),
+    ]);
+}
+
+async function runBacktest() {
+    const ticker = document.getElementById('bt-ticker').value;
+    const strategy = document.getElementById('bt-strategy').value;
+    const period = document.getElementById('bt-period').value;
+    const capital = document.getElementById('bt-capital').value;
+
+    if (!ticker || !strategy) {
+        showToast('Selecione ativo e estratégia', 'warning');
+        return;
+    }
+
+    const resultDiv = document.getElementById('bt-result');
+    resultDiv.innerHTML = '<div class="text-center my-4"><div class="spinner-border text-primary"></div><p class="mt-2">Executando backtest...</p></div>';
+
+    const data = await API.get(`/backtest?ticker=${ticker}&strategy=${strategy}&period=${period}&interval=1d&capital=${capital}`);
+
+    if (!data || !data.metrics) {
+        resultDiv.innerHTML = '<div class="alert alert-danger">Erro ao executar backtest. Verifique se há dados suficientes para o ativo.</div>';
+        return;
+    }
+
+    const m = data.metrics;
+    const returnColor = m.total_return_pct >= 0 ? 'success' : 'danger';
+
+    resultDiv.innerHTML = `
+        <div class="row g-3 mb-4">
+            <div class="col-md-3"><div class="card shadow-sm"><div class="card-body text-center">
+                <small class="text-muted">Retorno Total</small>
+                <div class="fs-4 fw-bold text-${returnColor}">${fmtPct(m.total_return_pct)}</div>
+                <small>${fmtCurrency(m.total_return)}</small>
+            </div></div></div>
+            <div class="col-md-3"><div class="card shadow-sm"><div class="card-body text-center">
+                <small class="text-muted">Win Rate</small>
+                <div class="fs-4 fw-bold">${fmt(m.win_rate)}%</div>
+                <small>${m.winning_trades}W / ${m.losing_trades}L</small>
+            </div></div></div>
+            <div class="col-md-3"><div class="card shadow-sm"><div class="card-body text-center">
+                <small class="text-muted">Profit Factor</small>
+                <div class="fs-4 fw-bold">${fmt(m.profit_factor)}</div>
+                <small>Sharpe: ${fmt(m.sharpe_ratio)}</small>
+            </div></div></div>
+            <div class="col-md-3"><div class="card shadow-sm"><div class="card-body text-center">
+                <small class="text-muted">Max Drawdown</small>
+                <div class="fs-4 fw-bold text-danger">-${fmt(m.max_drawdown_pct)}%</div>
+                <small>${fmtCurrency(m.max_drawdown)}</small>
+            </div></div></div>
+        </div>
+        <div class="row g-3 mb-4">
+            <div class="col-md-8">
+                <div class="card shadow-sm"><div class="card-header"><h6 class="mb-0">Curva de Capital</h6></div>
+                <div class="card-body"><canvas id="chart-equity" height="280"></canvas></div></div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm"><div class="card-header"><h6 class="mb-0">Detalhes</h6></div>
+                <div class="card-body">
+                    <p><strong>Ativo:</strong> ${data.ticker}</p>
+                    <p><strong>Estratégia:</strong> ${data.strategy_name || data.strategy_id}</p>
+                    <p><strong>Período:</strong> ${data.period} | ${data.data_points} candles</p>
+                    <p><strong>Capital Inicial:</strong> ${fmtCurrency(m.initial_capital)}</p>
+                    <p><strong>Capital Final:</strong> ${fmtCurrency(m.final_equity)}</p>
+                    <p><strong>Total Trades:</strong> ${m.total_trades}</p>
+                    <p><strong>Lucro Bruto:</strong> ${fmtCurrency(m.gross_profit)}</p>
+                    <p><strong>Perda Bruta:</strong> ${fmtCurrency(m.gross_loss)}</p>
+                    <hr>
+                    <button class="btn btn-sm btn-outline-primary" onclick="saveBacktest()" id="btn-save-bt"><i class="bi bi-save me-1"></i>Salvar</button>
+                </div></div>
+            </div>
+        </div>
+        <div class="card shadow-sm">
+            <div class="card-header"><h6 class="mb-0">Últimas Operações</h6></div>
+            <div class="card-body"><div class="table-responsive"><table class="table table-sm table-hover">
+                <thead><tr><th>Entrada</th><th>Saída</th><th>Preço E.</th><th>Preço S.</th><th>Qtd</th><th>Lucro</th><th>%</th></tr></thead>
+                <tbody>${(data.trades || []).map(t => `<tr>
+                    <td>${t.entry_date}</td><td>${t.exit_date}</td>
+                    <td>${fmt(t.entry_price)}</td><td>${fmt(t.exit_price)}</td>
+                    <td>${t.shares}</td>
+                    <td class="${t.profit >= 0 ? 'text-success' : 'text-danger'}">${fmtCurrency(t.profit)}</td>
+                    <td class="${t.return_pct >= 0 ? 'text-success' : 'text-danger'}">${fmtPct(t.return_pct)}</td>
+                </tr>`).join('')}</tbody>
+            </table></div></div>
+        </div>
+    `;
+
+    // Store for saving
+    APP._lastBacktest = data;
+
+    // Draw equity chart
+    if (data.equity_curve && data.equity_curve.length > 0) {
+        destroyChart('chart-equity');
+        const canvas = document.getElementById('chart-equity');
+        APP.charts['chart-equity'] = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: data.equity_curve.map(e => e.date),
+                datasets: [{
+                    label: 'Capital',
+                    data: data.equity_curve.map(e => e.equity),
+                    borderColor: m.total_return_pct >= 0 ? '#198754' : '#dc3545',
+                    backgroundColor: m.total_return_pct >= 0 ? 'rgba(25,135,84,0.1)' : 'rgba(220,53,69,0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0,
+                    borderWidth: 2,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { maxTicksAutoSkip: true, maxRotation: 0 } },
+                    y: { ticks: { callback: v => 'R$ ' + Number(v).toLocaleString('pt-BR') } },
+                },
+            },
         });
     }
+}
 
-    function renderCompare(ct, market, interval, strats) {
-        ct.innerHTML = `<div class="backtest-form"><div class="form-row">
-            <div class="form-group"><label>Ativo</label>${tickerInput(market)}</div>
-            <div class="form-group"><label>Período</label><select id="cmPeriod" class="form-input"><option value="3mo">3 meses</option><option value="6mo">6 meses</option><option value="1y" selected>1 ano</option></select></div>
-            <div class="form-group"><label>Capital</label><input type="number" id="cmCap" class="form-input" value="10000" min="100"></div>
-            <div class="form-group form-action"><button class="btn btn-primary" id="btnCmp"><i class="fas fa-play"></i> Comparar</button></div>
-        </div></div><div id="cmResult"></div>`;
-        document.getElementById('btnCmp').addEventListener('click', async () => {
-            const ticker = document.getElementById('btTicker').value.trim().toUpperCase();
-            if (!ticker) { Utils.showToast('Informe o ticker','error'); return; }
-            const rd = document.getElementById('cmResult');
-            rd.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Comparando estratégias...</p></div>';
-            try {
-                const data = await API.compareStrategies({ ticker, period: document.getElementById('cmPeriod').value, interval, capital: parseFloat(document.getElementById('cmCap').value)||10000 });
-                const rs = data.results || [];
-                if (!rs.length) { rd.innerHTML = '<p class="empty-state">Nenhum resultado.</p>'; return; }
-                rd.innerHTML = `<p class="result-summary">${data.total_strategies} estratégias para ${data.ticker}</p><div class="chart-container"><canvas id="chCmp"></canvas></div><div class="table-responsive"><table class="data-table"><thead><tr><th>#</th><th>Estratégia</th><th>Retorno</th><th>Trades</th><th>Win Rate</th><th>PF</th><th>DD</th></tr></thead><tbody>${rs.map((r,i) => { const cl = (r.total_return_pct||0)>=0?'positive':'negative'; return `<tr><td>${i+1}</td><td>${r.strategy_name||r.strategy}</td><td class="${cl}">${Utils.formatPercent(r.total_return_pct)}</td><td>${r.total_trades||0}</td><td>${Utils.formatPercent(r.win_rate)}</td><td>${(r.profit_factor||0).toFixed(2)}</td><td class="negative">${Utils.formatPercent(r.max_drawdown)}</td></tr>`; }).join('')}</tbody></table></div>`;
-                Charts.performanceBar('chCmp', rs.map(r => r.strategy_name||r.strategy), rs.map(r => r.total_return_pct||0));
-            } catch (e) { rd.innerHTML = `<div class="error-state"><i class="fas fa-exclamation-triangle"></i><p>${e.message}</p></div>`; }
+async function saveBacktest() {
+    if (!APP._lastBacktest) return;
+    const btn = document.getElementById('btn-save-bt');
+    if (btn) btn.disabled = true;
+
+    const resp = await API.post('/backtests/save', { result: APP._lastBacktest });
+    if (resp && resp.success) {
+        showToast('Backtest salvo com sucesso!', 'success');
+    } else {
+        showToast('Erro ao salvar backtest', 'danger');
+    }
+    if (btn) btn.disabled = false;
+}
+
+// ═══════════════════════════════════════════
+// BACKTEST — BULK
+// ═══════════════════════════════════════════
+
+async function renderBulk() {
+    const content = document.getElementById('main-content');
+    content.innerHTML = `
+        <h2 class="mb-4"><i class="bi bi-collection me-2"></i>Backtest em Massa</h2>
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Mercado</label>
+                        <select id="bulk-market" class="form-select">
+                            <option value="b3">B3</option>
+                            <option value="bmf">BMF</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Estratégia</label>
+                        <select id="bulk-strategy" class="form-select"></select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Período</label>
+                        <select id="bulk-period" class="form-select">
+                            <option value="3mo">3 meses</option>
+                            <option value="6mo">6 meses</option>
+                            <option value="1y" selected>1 ano</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Capital</label>
+                        <input type="number" id="bulk-capital" class="form-control" value="10000">
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button class="btn btn-primary w-100" onclick="runBulk()"><i class="bi bi-play-fill me-1"></i>Executar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="bulk-result"></div>
+    `;
+
+    await loadStrategies('bulk-strategy');
+}
+
+async function runBulk() {
+    const market = document.getElementById('bulk-market').value;
+    const strategy = document.getElementById('bulk-strategy').value;
+    const period = document.getElementById('bulk-period').value;
+    const capital = document.getElementById('bulk-capital').value;
+
+    if (!strategy) {
+        showToast('Selecione uma estratégia', 'warning');
+        return;
+    }
+
+    const resultDiv = document.getElementById('bulk-result');
+    resultDiv.innerHTML = '<div class="text-center my-4"><div class="spinner-border text-primary"></div><p class="mt-2">Executando backtest em todos os ativos... (pode demorar)</p></div>';
+
+    const data = await API.get(`/backtest/bulk?market=${market}&strategy=${strategy}&period=${period}&interval=1d&capital=${capital}`);
+
+    if (!data || !data.results) {
+        resultDiv.innerHTML = '<div class="alert alert-danger">Erro ao executar backtest em massa.</div>';
+        return;
+    }
+
+    resultDiv.innerHTML = `
+        <div class="alert alert-info">${data.total_tested} ativos testados com <strong>${strategy}</strong></div>
+        <div class="card shadow-sm">
+            <div class="card-body"><div class="table-responsive"><table class="table table-sm table-hover table-striped">
+                <thead><tr><th>Ativo</th><th>Retorno %</th><th>Win Rate</th><th>Trades</th><th>PF</th><th>Max DD%</th><th>Sharpe</th><th>Capital Final</th></tr></thead>
+                <tbody>${data.results.map(r => {
+                    const color = r.total_return_pct >= 0 ? 'text-success' : 'text-danger';
+                    return `<tr>
+                        <td class="fw-bold">${r.ticker}</td>
+                        <td class="${color}">${fmtPct(r.total_return_pct)}</td>
+                        <td>${fmt(r.win_rate)}%</td>
+                        <td>${r.total_trades}</td>
+                        <td>${fmt(r.profit_factor)}</td>
+                        <td class="text-danger">-${fmt(r.max_drawdown_pct)}%</td>
+                        <td>${fmt(r.sharpe_ratio)}</td>
+                        <td>${fmtCurrency(r.final_equity)}</td>
+                    </tr>`;
+                }).join('')}</tbody>
+            </table></div></div>
+        </div>
+    `;
+}
+
+// ═══════════════════════════════════════════
+// BACKTEST — COMPARE
+// ═══════════════════════════════════════════
+
+async function renderCompare() {
+    const content = document.getElementById('main-content');
+    content.innerHTML = `
+        <h2 class="mb-4"><i class="bi bi-bar-chart me-2"></i>Comparar Estratégias</h2>
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Ativo</label>
+                        <select id="cmp-ticker" class="form-select"></select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Período</label>
+                        <select id="cmp-period" class="form-select">
+                            <option value="3mo">3 meses</option>
+                            <option value="6mo">6 meses</option>
+                            <option value="1y" selected>1 ano</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Capital</label>
+                        <input type="number" id="cmp-capital" class="form-control" value="10000">
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button class="btn btn-primary w-100" onclick="runCompare()"><i class="bi bi-play-fill me-1"></i>Comparar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="cmp-result"></div>
+    `;
+
+    await loadTickers('cmp-ticker', 'b3');
+}
+
+async function runCompare() {
+    const ticker = document.getElementById('cmp-ticker').value;
+    const period = document.getElementById('cmp-period').value;
+    const capital = document.getElementById('cmp-capital').value;
+
+    if (!ticker) {
+        showToast('Selecione um ativo', 'warning');
+        return;
+    }
+
+    const resultDiv = document.getElementById('cmp-result');
+    resultDiv.innerHTML = '<div class="text-center my-4"><div class="spinner-border text-primary"></div><p class="mt-2">Comparando todas as estratégias...</p></div>';
+
+    const data = await API.get(`/backtest/compare?ticker=${ticker}&period=${period}&interval=1d&capital=${capital}`);
+
+    if (!data || !data.results) {
+        resultDiv.innerHTML = '<div class="alert alert-danger">Erro ao comparar estratégias.</div>';
+        return;
+    }
+
+    resultDiv.innerHTML = `
+        <div class="alert alert-info">${data.total_strategies} estratégias testadas com <strong>${ticker}</strong></div>
+        <div class="row g-3 mb-4">
+            <div class="col-md-8">
+                <div class="card shadow-sm"><div class="card-header"><h6 class="mb-0">Retorno por Estratégia</h6></div>
+                <div class="card-body"><canvas id="chart-compare" height="300"></canvas></div></div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm"><div class="card-header"><h6 class="mb-0">Ranking</h6></div>
+                <div class="card-body"><div class="table-responsive"><table class="table table-sm">
+                    <thead><tr><th>#</th><th>Estratégia</th><th>Retorno</th></tr></thead>
+                    <tbody>${data.results.map((r, i) => {
+                        const m = r.metrics || {};
+                        const color = (m.total_return_pct || 0) >= 0 ? 'text-success' : 'text-danger';
+                        return `<tr><td>${i + 1}</td><td>${r.strategy_name || r.strategy_id}</td><td class="${color}">${fmtPct(m.total_return_pct)}</td></tr>`;
+                    }).join('')}</tbody>
+                </table></div></div></div>
+            </div>
+        </div>
+    `;
+
+    // Chart
+    destroyChart('chart-compare');
+    const canvas = document.getElementById('chart-compare');
+    if (canvas) {
+        const labels = data.results.map(r => r.strategy_name || r.strategy_id);
+        const values = data.results.map(r => (r.metrics || {}).total_return_pct || 0);
+        const colors = values.map(v => v >= 0 ? '#198754' : '#dc3545');
+
+        APP.charts['chart-compare'] = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{ label: 'Retorno %', data: values, backgroundColor: colors }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: { legend: { display: false } },
+                scales: { x: { ticks: { callback: v => v + '%' } } },
+            },
         });
     }
+}
 
-    function renderBtResult(container, r) {
-        const rc = (r.total_return_pct||0) >= 0 ? 'positive' : 'negative';
-        container.innerHTML = `<div class="result-section"><div class="result-stats">
-            <div class="stat-card compact"><div class="stat-label">Retorno</div><div class="stat-value ${rc}">${Utils.formatPercent(r.total_return_pct)}</div></div>
-            <div class="stat-card compact"><div class="stat-label">Capital Final</div><div class="stat-value">${Utils.formatCurrency(r.final_capital)}</div></div>
-            <div class="stat-card compact"><div class="stat-label">Trades</div><div class="stat-value">${r.total_trades||0}</div></div>
-            <div class="stat-card compact"><div class="stat-label">Win Rate</div><div class="stat-value">${Utils.formatPercent(r.win_rate)}</div></div>
-            <div class="stat-card compact"><div class="stat-label">Profit Factor</div><div class="stat-value">${(r.profit_factor||0).toFixed(2)}</div></div>
-            <div class="stat-card compact"><div class="stat-label">Max DD</div><div class="stat-value negative">${Utils.formatPercent(r.max_drawdown)}</div></div>
-        </div><div class="result-charts"><div class="chart-container"><h4>Curva de Patrimônio</h4><canvas id="chEq"></canvas></div><div class="chart-container chart-small"><h4>Win Rate</h4><canvas id="chWR"></canvas></div></div>
-        <div class="result-actions"><button class="btn btn-primary" id="btnSave"><i class="fas fa-save"></i> Salvar</button></div></div>`;
-        if (r.equity_curve && r.equity_curve.length) Charts.equityCurve('chEq', r.equity_curve.map((_,i)=>i+1), r.equity_curve);
-        if (r.total_trades > 0) Charts.winRateDonut('chWR', r.winning_trades||0, r.losing_trades||0);
-        document.getElementById('btnSave')?.addEventListener('click', async () => {
-            try { await API.saveBacktest({ result: r }); Utils.showToast('Backtest salvo!','success'); }
-            catch (e) { Utils.showToast('Erro: '+e.message,'error'); }
-        });
+// ═══════════════════════════════════════════
+// STRATEGIES
+// ═══════════════════════════════════════════
+
+async function renderStrategies() {
+    const content = document.getElementById('main-content');
+    content.innerHTML = `
+        <h2 class="mb-4"><i class="bi bi-lightbulb me-2"></i>Estratégias</h2>
+        <div id="strats-list"><div class="text-center my-4"><div class="spinner-border text-primary"></div></div></div>
+    `;
+
+    const data = await API.get('/strategies');
+
+    if (!data || !data.strategies || data.strategies.length === 0) {
+        document.getElementById('strats-list').innerHTML = '<div class="alert alert-warning">Nenhuma estratégia encontrada.</div>';
+        return;
     }
 
-    /* ═══════════ STRATEGIES ═══════════ */
-
-    const TC = {
-        daily: [
-            { id:'tc_sma_9_21', name:'Cruzamento SMA 9/21', category:'Tendência', entry:'SMA 9 cruza acima da SMA 21', exit:'SMA 9 cruza abaixo da SMA 21', indicators:'SMA 9, SMA 21', timeframe:'Diário', editable:false },
-            { id:'tc_sma_20_50', name:'Cruzamento SMA 20/50', category:'Tendência', entry:'SMA 20 cruza acima da SMA 50', exit:'SMA 20 cruza abaixo da SMA 50', indicators:'SMA 20, SMA 50', timeframe:'Diário', editable:false },
-            { id:'tc_ema_9_21', name:'Cruzamento EMA 9/21', category:'Tendência', entry:'EMA 9 cruza acima da EMA 21', exit:'EMA 9 cruza abaixo da EMA 21', indicators:'EMA 9, EMA 21', timeframe:'Diário', editable:false },
-            { id:'tc_ema_12_26', name:'Cruzamento EMA 12/26', category:'Tendência', entry:'EMA 12 cruza acima da EMA 26', exit:'EMA 12 cruza abaixo da EMA 26', indicators:'EMA 12, EMA 26', timeframe:'Diário', editable:false },
-            { id:'tc_macd', name:'MACD (12,26,9)', category:'Tendência', entry:'MACD cruza acima da Signal Line', exit:'MACD cruza abaixo da Signal Line', indicators:'MACD, Signal, Histograma', timeframe:'Diário', editable:false },
-            { id:'tc_rsi_14', name:'RSI 14 (30/70)', category:'Oscilador', entry:'RSI 14 < 30 (sobrevenda)', exit:'RSI 14 > 70 (sobrecompra)', indicators:'RSI 14', timeframe:'Diário', editable:false },
-            { id:'tc_rsi_9', name:'RSI 9 (25/75)', category:'Oscilador', entry:'RSI 9 < 25', exit:'RSI 9 > 75', indicators:'RSI 9', timeframe:'Diário', editable:false },
-            { id:'tc_boll', name:'Bollinger Bands (20,2)', category:'Volatilidade', entry:'Preço toca banda inferior', exit:'Preço toca banda superior', indicators:'BB(20,2), SMA 20', timeframe:'Diário', editable:false },
-            { id:'tc_stoch', name:'Estocástico (14,3)', category:'Oscilador', entry:'Sobrevenda + %K > %D', exit:'Sobrecompra + %K < %D', indicators:'%K(14), %D(3)', timeframe:'Diário', editable:false },
-            { id:'tc_adx', name:'ADX Tendência (25)', category:'Tendência', entry:'ADX > 25 + DI+ > DI−', exit:'ADX < 20 ou DI+ < DI−', indicators:'ADX(14), DI+, DI−', timeframe:'Diário', editable:false },
-            { id:'tc_triple', name:'Tripla EMA (9/21/55)', category:'Tendência', entry:'EMA9 > EMA21 > EMA55', exit:'EMA9 < EMA21', indicators:'EMA 9, 21, 55', timeframe:'Diário', editable:false },
-            { id:'tc_combo', name:'Combo RSI + MACD', category:'Combo', entry:'RSI<40 E MACD>Signal', exit:'RSI>60 E MACD<Signal', indicators:'RSI 14, MACD', timeframe:'Diário', editable:false },
-            { id:'tc_break', name:'Breakout + Volume', category:'Breakout', entry:'Rompimento máxima + Vol 1.5× média', exit:'Retorno abaixo breakout', indicators:'Máximas, Vol SMA20', timeframe:'Diário', editable:false },
-        ],
-        intraday_b3: [
-            { id:'tc_ib1', name:'EMA 9/21 (5min)', category:'Tendência', entry:'EMA 9 cruza acima EMA 21 no 5min', exit:'EMA 9 cruza abaixo EMA 21', indicators:'EMA 9, EMA 21', timeframe:'5 min', editable:false },
-            { id:'tc_ib2', name:'VWAP Bounce', category:'Reversão', entry:'Preço retorna ao VWAP + candle reversão', exit:'1 ATR do VWAP', indicators:'VWAP, ATR(14)', timeframe:'5 min', editable:false },
-            { id:'tc_ib3', name:'Scalp RSI 9 (5min)', category:'Oscilador', entry:'RSI 9 < 20', exit:'RSI 9 > 80 ou gain 0.5%', indicators:'RSI 9', timeframe:'5 min', editable:false },
-            { id:'tc_ib4', name:'MACD (15min)', category:'Tendência', entry:'MACD cruza acima Signal no 15min', exit:'MACD cruza abaixo Signal', indicators:'MACD(12,26,9)', timeframe:'15 min', editable:false },
-            { id:'tc_ib5', name:'Bollinger Squeeze (5min)', category:'Volatilidade', entry:'Squeeze + rompimento banda superior', exit:'Retorno à SMA 20', indicators:'BB(20,2), BB Width', timeframe:'5 min', editable:false },
-            { id:'tc_ib6', name:'Opening Range Breakout', category:'Breakout', entry:'Rompimento máxima 15min iniciais', exit:'Stop mínima range ou 2R', indicators:'High/Low 15min', timeframe:'15 min', editable:false },
-            { id:'tc_ib7', name:'EMA 9 + Volume', category:'Combo', entry:'Acima EMA 9 + Vol 2× média', exit:'Abaixo EMA 9', indicators:'EMA 9, Vol SMA20', timeframe:'5 min', editable:false },
-            { id:'tc_ib8', name:'Estocástico Rápido (5min)', category:'Oscilador', entry:'%K cruza %D em sobrevenda (<20)', exit:'%K cruza %D em sobrecompra (>80)', indicators:'%K(5), %D(3)', timeframe:'5 min', editable:false },
-        ],
-        intraday_bmf: [
-            { id:'tc_bm1', name:'EMA 9/21 Mini-índice', category:'Tendência', entry:'EMA 9 cruza acima EMA 21 (1min)', exit:'EMA 9 cruza abaixo EMA 21', indicators:'EMA 9, EMA 21', timeframe:'1 min', editable:false },
-            { id:'tc_bm2', name:'VWAP Mini-dólar', category:'Reversão', entry:'Toque VWAP + candle reversão', exit:'1 ATR do VWAP', indicators:'VWAP, ATR(14)', timeframe:'1 min', editable:false },
-            { id:'tc_bm3', name:'Scalp 200pts Mini-índice', category:'Scalp', entry:'EMA9>EMA21 + RSI>50', exit:'Gain 200pts ou loss 100pts', indicators:'EMA 9, 21, RSI 9', timeframe:'1 min', editable:false },
-            { id:'tc_bm4', name:'MACD Mini-dólar (5min)', category:'Tendência', entry:'MACD cruza acima Signal 5min', exit:'MACD cruza abaixo Signal', indicators:'MACD(12,26,9)', timeframe:'5 min', editable:false },
-            { id:'tc_bm5', name:'Bollinger Mini-índice', category:'Volatilidade', entry:'Banda inferior + volume alto', exit:'SMA 20 ou banda superior', indicators:'BB(20,2)', timeframe:'5 min', editable:false },
-            { id:'tc_bm6', name:'ORB Mini-índice (5min)', category:'Breakout', entry:'Rompimento range 5min iniciais', exit:'Stop extremidade oposta', indicators:'High/Low 5min', timeframe:'5 min', editable:false },
-            { id:'tc_bm7', name:'DI Futuro — Tendência', category:'Tendência', entry:'SMA 5 cruza acima SMA 20', exit:'SMA 5 cruza abaixo SMA 20', indicators:'SMA 5, SMA 20', timeframe:'Diário', editable:false },
-            { id:'tc_bm8', name:'Spread WIN/WDO', category:'Arbitragem', entry:'Spread desvia 2σ da média', exit:'Spread retorna à média', indicators:'Spread, Média, Desvio', timeframe:'5 min', editable:false },
-        ],
-    };
-
-    function _getCust() { try { return JSON.parse(localStorage.getItem('th_cust')||'{}'); } catch { return {}; } }
-    function _setCust(d) { localStorage.setItem('th_cust', JSON.stringify(d)); }
-    function _allStrats(tab) { return [...(TC[tab]||[]), ...(_getCust()[tab]||[])]; }
-
-    function _badgeClass(cat) {
-        return 'badge-' + cat.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z]/g,'');
-    }
-
-    function renderStrategiesPage() {
-        const c = document.getElementById('pageContent');
-        c.innerHTML = `<div class="strategies-page"><div class="page-toolbar">
-            <div class="tab-bar"><button class="tab-btn active" data-st="daily">B3 Daily</button><button class="tab-btn" data-st="intraday_b3">Intraday B3</button><button class="tab-btn" data-st="intraday_bmf">Intraday BMF</button></div>
-            <button class="btn btn-primary" id="btnAdd"><i class="fas fa-plus"></i> Nova Estratégia</button>
-        </div><div id="stContent"></div></div>`;
-        let curTab = 'daily';
-        function renderSt(tab) {
-            curTab = tab;
-            const ss = _allStrats(tab);
-            const el = document.getElementById('stContent');
-            if (!ss.length) { el.innerHTML = '<p class="empty-state">Nenhuma estratégia. Clique "Nova" para criar.</p>'; return; }
-            el.innerHTML = `<div class="strategies-grid">${ss.map(s => `<div class="strategy-card"><div class="strategy-header"><span class="strategy-badge ${_badgeClass(s.category)}">${s.category}</span>${s.editable!==false?`<div class="strategy-actions"><button class="btn-icon btn-edit" data-sid="${s.id}"><i class="fas fa-pen"></i></button><button class="btn-icon btn-delete" data-sid="${s.id}"><i class="fas fa-trash"></i></button></div>`:'<span class="badge-default">Padrão</span>'}</div><h4 class="strategy-name">${s.name}</h4><div class="strategy-detail"><strong>Timeframe:</strong> ${s.timeframe}</div><div class="strategy-detail"><strong>Indicadores:</strong> ${s.indicators}</div><div class="strategy-detail"><strong>Entrada:</strong> ${s.entry}</div><div class="strategy-detail"><strong>Saída:</strong> ${s.exit}</div></div>`).join('')}</div>`;
-            el.querySelectorAll('.btn-edit').forEach(b => b.addEventListener('click', () => openModal(curTab, b.dataset.sid)));
-            el.querySelectorAll('.btn-delete').forEach(b => b.addEventListener('click', () => delStrat(curTab, b.dataset.sid)));
-        }
-        c.querySelectorAll('.tab-btn[data-st]').forEach(b => b.addEventListener('click', () => {
-            c.querySelectorAll('.tab-btn[data-st]').forEach(x=>x.classList.remove('active'));
-            b.classList.add('active');
-            renderSt(b.dataset.st);
-        }));
-        document.getElementById('btnAdd').addEventListener('click', () => openModal(curTab, null));
-        renderSt('daily');
-    }
-
-    function openModal(tab, editId) {
-        let ex = null;
-        if (editId) { const cu = _getCust(); ex = (cu[tab]||[]).find(s=>s.id===editId); if (!ex) return; }
-        const ov = document.createElement('div');
-        ov.className = 'modal-overlay';
-        ov.innerHTML = `<div class="modal-content"><div class="modal-header"><h3>${editId?'Editar':'Nova'} Estratégia</h3><button class="btn-icon modal-close"><i class="fas fa-times"></i></button></div><div class="modal-body">
-            <div class="form-group"><label>Nome</label><input type="text" id="mN" class="form-input" value="${ex?ex.name:''}" placeholder="Ex: Minha EMA"></div>
-            <div class="form-group"><label>Categoria</label><select id="mC" class="form-input">${['Tendência','Oscilador','Volatilidade','Breakout','Reversão','Combo','Scalp','Arbitragem'].map(c=>`<option value="${c}" ${ex?.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
-            <div class="form-group"><label>Timeframe</label><input type="text" id="mT" class="form-input" value="${ex?ex.timeframe:''}" placeholder="5 min, Diário"></div>
-            <div class="form-group"><label>Indicadores</label><input type="text" id="mI" class="form-input" value="${ex?ex.indicators:''}" placeholder="EMA 9, RSI 14"></div>
-            <div class="form-group"><label>Entrada</label><textarea id="mE" class="form-input" rows="3" placeholder="Condição de entrada...">${ex?ex.entry:''}</textarea></div>
-            <div class="form-group"><label>Saída</label><textarea id="mX" class="form-input" rows="3" placeholder="Condição de saída...">${ex?ex.exit:''}</textarea></div>
-        </div><div class="modal-footer"><button class="btn btn-secondary modal-cancel">Cancelar</button><button class="btn btn-primary" id="mSave"><i class="fas fa-save"></i> ${editId?'Salvar':'Criar'}</button></div></div>`;
-        document.body.appendChild(ov);
-        const close = () => ov.remove();
-        ov.querySelector('.modal-close').addEventListener('click', close);
-        ov.querySelector('.modal-cancel').addEventListener('click', close);
-        ov.addEventListener('click', e => { if (e.target === ov) close(); });
-        document.getElementById('mSave').addEventListener('click', () => {
-            const name = document.getElementById('mN').value.trim();
-            const entry = document.getElementById('mE').value.trim();
-            const exit = document.getElementById('mX').value.trim();
-            if (!name||!entry||!exit) { Utils.showToast('Preencha nome, entrada e saída','error'); return; }
-            const obj = { name, category:document.getElementById('mC').value, timeframe:document.getElementById('mT').value.trim(), indicators:document.getElementById('mI').value.trim(), entry, exit, editable:true };
-            const cu = _getCust(); if (!cu[tab]) cu[tab] = [];
-            if (editId) { const i = cu[tab].findIndex(s=>s.id===editId); if (i>=0) cu[tab][i] = {...cu[tab][i],...obj}; }
-            else { obj.id = 'c_'+Date.now(); cu[tab].push(obj); }
-            _setCust(cu); close(); Utils.showToast(editId?'Atualizada!':'Criada!','success');
-            renderStrategiesPage();
-            setTimeout(() => document.querySelectorAll('.tab-btn[data-st]').forEach(b => { if (b.dataset.st===tab) b.click(); }), 50);
-        });
-    }
-
-    function delStrat(tab, id) {
-        if (!confirm('Excluir esta estratégia?')) return;
-        const cu = _getCust(); if (cu[tab]) cu[tab] = cu[tab].filter(s=>s.id!==id);
-        _setCust(cu); Utils.showToast('Excluída','success');
-        renderStrategiesPage();
-        setTimeout(() => document.querySelectorAll('.tab-btn[data-st]').forEach(b => { if (b.dataset.st===tab) b.click(); }), 50);
-    }
-
-    /* ═══════════ SAVED BACKTESTS ═══════════ */
-
-    async function renderSavedPage() {
-        const c = document.getElementById('pageContent');
-        c.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Carregando...</p></div>';
-        try {
-            const data = await API.listSavedBacktests();
-            const list = data.backtests || [];
-            if (!list.length) { c.innerHTML = '<p class="empty-state">Nenhum backtest salvo. Execute e salve um backtest para vê-lo aqui.</p>'; return; }
-            c.innerHTML = `<div class="table-responsive"><table class="data-table"><thead><tr><th>ID</th><th>Ativo</th><th>Estratégia</th><th>Retorno</th><th>Data</th><th>Ações</th></tr></thead><tbody>${list.map(bt => {
-                const r = bt.result||bt; const cl = (r.total_return_pct||0)>=0?'positive':'negative';
-                return `<tr><td>${r.id||bt.id||'--'}</td><td><strong>${r.ticker||'--'}</strong></td><td>${r.strategy||'--'}</td><td class="${cl}">${Utils.formatPercent(r.total_return_pct)}</td><td>${r.saved_at?Utils.formatDate(r.saved_at):'--'}</td><td><button class="btn-icon" data-view="${r.id||bt.id}"><i class="fas fa-eye"></i></button> <button class="btn-icon btn-delete" data-del="${r.id||bt.id}"><i class="fas fa-trash"></i></button></td></tr>`;
-            }).join('')}</tbody></table></div><div id="savedDetail"></div>`;
-            c.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', async () => {
-                try { const bt = await API.getSavedBacktest(b.dataset.view); renderBtResult(document.getElementById('savedDetail'), bt.result||bt); }
-                catch (e) { Utils.showToast('Erro: '+e.message,'error'); }
-            }));
-            c.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
-                if (!confirm('Excluir?')) return;
-                try { await API.deleteSavedBacktest(b.dataset.del); Utils.showToast('Excluído','success'); renderSavedPage(); }
-                catch (e) { Utils.showToast('Erro: '+e.message,'error'); }
-            }));
-        } catch (e) { c.innerHTML = `<div class="error-state"><i class="fas fa-exclamation-triangle"></i><p>${e.message}</p></div>`; }
-    }
-
-    /* ═══════════ CONFIG ═══════════ */
-
-    function renderConfigPage() {
-        const c = document.getElementById('pageContent');
-        if (!configPin) {
-            c.innerHTML = `<div class="config-login"><div class="login-card"><i class="fas fa-lock login-icon"></i><h3>Acesso Protegido</h3><p>Digite o PIN para acessar</p><div class="form-group"><input type="password" id="pinIn" class="form-input" placeholder="PIN" maxlength="10"></div><button class="btn btn-primary" id="btnPin" style="width:100%"><i class="fas fa-unlock"></i> Verificar</button></div></div>`;
-            document.getElementById('pinIn').addEventListener('keydown', e => { if (e.key==='Enter') document.getElementById('btnPin').click(); });
-            document.getElementById('btnPin').addEventListener('click', async () => {
-                const pin = document.getElementById('pinIn').value.trim();
-                if (!pin) { Utils.showToast('Digite o PIN','error'); return; }
-                try { const r = await API.verifyPin(pin); if (r.valid) { configPin = pin; Utils.showToast('Verificado!','success'); renderConfigPage(); } else Utils.showToast('PIN incorreto','error'); }
-                catch (e) { Utils.showToast('Erro: '+e.message,'error'); }
-            });
-            return;
-        }
-        c.innerHTML = `<div class="config-panel">
-            <div class="config-section"><h3><i class="fas fa-database"></i> Storage</h3><div id="cfStats"><div class="spinner"></div></div></div>
-            <div class="config-section"><h3><i class="fas fa-download"></i> Download de Dados</h3><div class="form-row">
-                <div class="form-group"><label>Ticker</label><input type="text" id="dlT" class="form-input" placeholder="PETR4"></div>
-                <div class="form-group"><label>Início</label><input type="date" id="dlS" class="form-input" value="${Utils.getDefaultStartDate()}"></div>
-                <div class="form-group"><label>Fim</label><input type="date" id="dlE" class="form-input" value="${Utils.getTodayDate()}"></div>
-                <div class="form-group"><label>Timeframe</label><select id="dlTF" class="form-input"><option value="daily">Diário</option><option value="intraday">Intraday</option></select></div>
-            </div><button class="btn btn-primary" id="btnDl"><i class="fas fa-download"></i> Baixar</button><div id="dlR"></div></div>
-            <div class="config-section"><h3><i class="fas fa-sync-alt"></i> Atualização Manual</h3><p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:.8rem">Atualizar todos os ativos.</p><button class="btn btn-primary" id="btnUpd"><i class="fas fa-sync-alt"></i> Atualizar Todos</button><div id="updR"></div></div>
-            <div class="config-section"><h3><i class="fas fa-list"></i> Ativos Cadastrados</h3><div id="cfAssets"><div class="spinner"></div></div></div>
-            <div class="config-section"><h3><i class="fas fa-key"></i> Alterar PIN</h3><div class="form-row"><div class="form-group"><label>Novo</label><input type="password" id="nPin" class="form-input" maxlength="10"></div><div class="form-group"><label>Confirmar</label><input type="password" id="cPin" class="form-input" maxlength="10"></div></div><button class="btn btn-primary" id="btnChg"><i class="fas fa-key"></i> Alterar</button></div>
-            <div class="config-section"><button class="btn btn-secondary" id="btnOut"><i class="fas fa-sign-out-alt"></i> Sair</button></div>
-        </div>`;
-        _loadCfStats(); _loadCfAssets();
-        document.getElementById('btnDl').addEventListener('click', async () => {
-            const t = document.getElementById('dlT').value.trim().toUpperCase();
-            if (!t) { Utils.showToast('Ticker','error'); return; }
-            const rd = document.getElementById('dlR'); rd.innerHTML = '<div class="spinner"></div>';
-            try { const r = await API.downloadData({ pin:configPin, ticker:t, start_date:document.getElementById('dlS').value, end_date:document.getElementById('dlE').value, timeframe:document.getElementById('dlTF').value });
-                rd.innerHTML = `<p class="${r.success?'positive':'negative'}">${r.message}</p>`; if (r.success) { _loadCfStats(); _loadCfAssets(); updateStorageIndicator(); }
-            } catch (e) { rd.innerHTML = `<p class="negative">${e.message}</p>`; }
-        });
-        document.getElementById('btnUpd').addEventListener('click', async () => {
-            const rd = document.getElementById('updR'); rd.innerHTML = '<div class="spinner"></div>';
-            try { const r = await API.manualUpdate({ pin:configPin }); rd.innerHTML = `<p class="positive">${r.message}</p>`; _loadCfStats(); updateStorageIndicator(); }
-            catch (e) { rd.innerHTML = `<p class="negative">${e.message}</p>`; }
-        });
-        document.getElementById('btnChg').addEventListener('click', async () => {
-            const n = document.getElementById('nPin').value.trim(), co = document.getElementById('cPin').value.trim();
-            if (!n||n!==co) { Utils.showToast('PINs não conferem','error'); return; }
-            try { await API.changePin(configPin, n); configPin = n; Utils.showToast('PIN alterado!','success'); }
-            catch (e) { Utils.showToast(e.message,'error'); }
-        });
-        document.getElementById('btnOut').addEventListener('click', () => { configPin = null; Utils.showToast('Saiu','success'); renderConfigPage(); });
-    }
-
-    async function _loadCfStats() {
-        const el = document.getElementById('cfStats'); if (!el) return;
-        try { const s = await API.getStorageStats();
-            el.innerHTML = `<div class="stats-grid-mini"><div><strong>${s.total_assets||0}</strong><span>Ativos</span></div><div><strong>${s.daily_assets||0}</strong><span>Daily</span></div><div><strong>${s.intraday_assets||0}</strong><span>Intraday</span></div><div><strong>${s.total_records||0}</strong><span>Registros</span></div><div><strong>${s.total_backtests||0}</strong><span>Backtests</span></div><div><strong>${s.storage_type||'supabase'}</strong><span>Storage</span></div></div>`;
-        } catch (_) { el.innerHTML = '<p class="negative">Erro</p>'; }
-    }
-
-    async function _loadCfAssets() {
-        const el = document.getElementById('cfAssets'); if (!el) return;
-        try { const d = await API.listSavedAssets(); const as = d.assets||[];
-            if (!as.length) { el.innerHTML = '<p>Nenhum ativo cadastrado.</p>'; return; }
-            el.innerHTML = `<div class="table-responsive"><table class="data-table"><thead><tr><th>Ticker</th><th>Nome</th><th>TF</th><th>Reg</th><th></th></tr></thead><tbody>${as.map(a => `<tr><td><strong>${a.ticker}</strong></td><td>${a.name||'--'}</td><td>${a.timeframe||'daily'}</td><td>${a.records||0}</td><td><button class="btn-icon btn-delete" data-dt="${a.ticker}"><i class="fas fa-trash"></i></button></td></tr>`).join('')}</tbody></table></div>`;
-            el.querySelectorAll('[data-dt]').forEach(b => b.addEventListener('click', async () => {
-                if (!confirm('Excluir '+b.dataset.dt+'?')) return;
-                try { await API.deleteAsset(b.dataset.dt, configPin); Utils.showToast('Excluído','success'); _loadCfAssets(); _loadCfStats(); updateStorageIndicator(); }
-                catch (e) { Utils.showToast(e.message,'error'); }
-            }));
-        } catch (_) { el.innerHTML = '<p class="negative">Erro</p>'; }
-    }
-
-    /* ═══════════ BOOT ═══════════ */
-
-    document.addEventListener('DOMContentLoaded', () => {
-        init();
-        setTimeout(() => { const o = document.getElementById('loadingOverlay'); if (o) { o.classList.add('hidden'); setTimeout(() => o.style.display='none', 500); } }, 600);
+    // Group by category
+    const groups = {};
+    data.strategies.forEach(s => {
+        if (!groups[s.category]) groups[s.category] = [];
+        groups[s.category].push(s);
     });
 
-    return { navigateTo, init };
-})();
+    let html = '';
+    for (const [cat, strats] of Object.entries(groups)) {
+        html += `<h5 class="mt-4 mb-3"><span class="badge bg-secondary">${cat}</span></h5>`;
+        html += '<div class="row g-3">';
+        strats.forEach(s => {
+            html += `
+                <div class="col-md-4">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-body">
+                            <h6 class="card-title">${s.name}</h6>
+                            <p class="card-text text-muted small">${s.description}</p>
+                            <code class="small">${s.id}</code>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+    }
+
+    document.getElementById('strats-list').innerHTML = html;
+}
+
+// ═══════════════════════════════════════════
+// SAVED BACKTESTS
+// ═══════════════════════════════════════════
+
+async function renderSaved() {
+    const content = document.getElementById('main-content');
+    content.innerHTML = `
+        <h2 class="mb-4"><i class="bi bi-bookmark me-2"></i>Backtests Salvos</h2>
+        <div id="saved-list"><div class="text-center my-4"><div class="spinner-border text-primary"></div></div></div>
+    `;
+
+    const data = await API.get('/backtests/saved');
+    const list = (data && data.backtests) || [];
+
+    if (list.length === 0) {
+        document.getElementById('saved-list').innerHTML = '<div class="alert alert-info">Nenhum backtest salvo ainda. Execute um backtest e clique em "Salvar".</div>';
+        return;
+    }
+
+    document.getElementById('saved-list').innerHTML = `
+        <div class="card shadow-sm"><div class="card-body"><div class="table-responsive"><table class="table table-sm table-hover">
+            <thead><tr><th>ID</th><th>Ativo</th><th>Estratégia</th><th>Retorno</th><th>Data</th><th></th></tr></thead>
+            <tbody>${list.map(bt => {
+                const color = bt.total_return_pct >= 0 ? 'text-success' : 'text-danger';
+                return `<tr>
+                    <td><code>${bt.id}</code></td>
+                    <td class="fw-bold">${bt.ticker}</td>
+                    <td>${bt.strategy}</td>
+                    <td class="${color}">${fmtPct(bt.total_return_pct)}</td>
+                    <td>${new Date(bt.saved_at).toLocaleDateString('pt-BR')}</td>
+                    <td><button class="btn btn-sm btn-outline-danger" onclick="deleteSavedBt('${bt.id}')"><i class="bi bi-trash"></i></button></td>
+                </tr>`;
+            }).join('')}</tbody>
+        </table></div></div></div>
+    `;
+}
+
+async function deleteSavedBt(id) {
+    if (!confirm('Remover backtest salvo?')) return;
+    await API.del(`/backtests/saved/${id}`);
+    renderSaved();
+}
+
+// ═══════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════
+
+async function renderConfig() {
+    const content = document.getElementById('main-content');
+
+    if (!APP.pin) {
+        content.innerHTML = `
+            <h2 class="mb-4"><i class="bi bi-gear me-2"></i>Configurações</h2>
+            <div class="card shadow-sm" style="max-width: 400px;">
+                <div class="card-body">
+                    <h5>Autenticação</h5>
+                    <p class="text-muted">Digite o PIN para acessar as configurações.</p>
+                    <div class="mb-3">
+                        <input type="password" id="cfg-pin" class="form-control" placeholder="PIN" maxlength="10">
+                    </div>
+                    <button class="btn btn-primary" onclick="verifyPin()">Entrar</button>
+                    <div id="pin-error" class="text-danger mt-2" style="display:none;"></div>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    content.innerHTML = `
+        <h2 class="mb-4"><i class="bi bi-gear me-2"></i>Configurações</h2>
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card shadow-sm">
+                    <div class="card-header"><h6 class="mb-0">Armazenamento</h6></div>
+                    <div class="card-body" id="cfg-storage">Carregando...</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card shadow-sm">
+                    <div class="card-header"><h6 class="mb-0">Download de Dados</h6></div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Ativo</label>
+                            <input type="text" id="cfg-dl-ticker" class="form-control" placeholder="Ex: PETR4">
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col"><label class="form-label">Início</label><input type="date" id="cfg-dl-start" class="form-control"></div>
+                            <div class="col"><label class="form-label">Fim</label><input type="date" id="cfg-dl-end" class="form-control"></div>
+                        </div>
+                        <button class="btn btn-primary" onclick="downloadData()"><i class="bi bi-download me-1"></i>Baixar</button>
+                        <div id="cfg-dl-result" class="mt-2"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card shadow-sm">
+                    <div class="card-header"><h6 class="mb-0">Atualização Manual</h6></div>
+                    <div class="card-body">
+                        <p class="text-muted">Atualizar dados de todos os ativos B3 (até 10).</p>
+                        <button class="btn btn-warning" onclick="manualUpdate()" id="btn-update"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar Tudo</button>
+                        <div id="cfg-update-result" class="mt-2"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card shadow-sm">
+                    <div class="card-header"><h6 class="mb-0">Alterar PIN</h6></div>
+                    <div class="card-body">
+                        <div class="mb-3"><input type="password" id="cfg-new-pin" class="form-control" placeholder="Novo PIN"></div>
+                        <button class="btn btn-outline-primary" onclick="changePin()">Alterar</button>
+                        <div id="cfg-pin-result" class="mt-2"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header"><h6 class="mb-0">Ativos Salvos</h6></div>
+                    <div class="card-body" id="cfg-assets">Carregando...</div>
+                </div>
+            </div>
+        </div>
+        <div class="mt-3"><button class="btn btn-outline-secondary" onclick="logout()"><i class="bi bi-box-arrow-left me-1"></i>Sair</button></div>
+    `;
+
+    // Load storage stats
+    const stats = await API.get('/storage/stats');
+    const storageDiv = document.getElementById('cfg-storage');
+    if (stats) {
+        storageDiv.innerHTML = `
+            <p><strong>Ativos totais:</strong> ${stats.total_assets}</p>
+            <p><strong>Diários:</strong> ${stats.daily_assets} | <strong>Intraday:</strong> ${stats.intraday_assets}</p>
+            <p><strong>Registros:</strong> ${stats.total_records}</p>
+            <p><strong>Backtests salvos:</strong> ${stats.total_backtests}</p>
+            <p><strong>Última atualização:</strong> ${stats.last_auto_update || 'Nunca'}</p>
+        `;
+    }
+
+    // Load saved assets
+    const assetsData = await API.get('/config/assets');
+    const assetsDiv = document.getElementById('cfg-assets');
+    const assets = (assetsData && assetsData.assets) || [];
+    if (assets.length === 0) {
+        assetsDiv.innerHTML = '<p class="text-muted">Nenhum ativo salvo no Supabase.</p>';
+    } else {
+        assetsDiv.innerHTML = `<div class="table-responsive"><table class="table table-sm">
+            <thead><tr><th>Ticker</th><th>Nome</th><th>Última Atualização</th><th></th></tr></thead>
+            <tbody>${assets.map(a => `<tr>
+                <td class="fw-bold">${a.ticker}</td>
+                <td>${a.name || '—'}</td>
+                <td>${a.last_update ? new Date(a.last_update).toLocaleDateString('pt-BR') : '—'}</td>
+                <td><button class="btn btn-sm btn-outline-danger" onclick="deleteAsset('${a.ticker}')"><i class="bi bi-trash"></i></button></td>
+            </tr>`).join('')}</tbody>
+        </table></div>`;
+    }
+}
+
+async function verifyPin() {
+    const pin = document.getElementById('cfg-pin').value;
+    const errorDiv = document.getElementById('pin-error');
+
+    const resp = await API.post('/config/verify-pin', { pin });
+    if (resp && resp.valid) {
+        APP.pin = pin;
+        renderConfig();
+    } else {
+        errorDiv.textContent = 'PIN incorreto';
+        errorDiv.style.display = 'block';
+    }
+}
+
+async function downloadData() {
+    const ticker = document.getElementById('cfg-dl-ticker').value.toUpperCase();
+    const start = document.getElementById('cfg-dl-start').value;
+    const end = document.getElementById('cfg-dl-end').value;
+    const resultDiv = document.getElementById('cfg-dl-result');
+
+    if (!ticker) {
+        resultDiv.innerHTML = '<span class="text-warning">Informe o ticker</span>';
+        return;
+    }
+
+    resultDiv.innerHTML = '<div class="spinner-border spinner-border-sm text-primary"></div> Baixando...';
+
+    const resp = await API.post('/config/download-data', {
+        pin: APP.pin,
+        ticker,
+        start_date: start || '2025-01-01',
+        end_date: end || new Date().toISOString().split('T')[0],
+        timeframe: 'daily',
+    });
+
+    if (resp && resp.success) {
+        resultDiv.innerHTML = `<span class="text-success">${resp.message}</span>`;
+    } else {
+        resultDiv.innerHTML = `<span class="text-danger">${resp ? resp.message : 'Erro'}</span>`;
+    }
+}
+
+async function manualUpdate() {
+    const btn = document.getElementById('btn-update');
+    const resultDiv = document.getElementById('cfg-update-result');
+    btn.disabled = true;
+    resultDiv.innerHTML = '<div class="spinner-border spinner-border-sm text-warning"></div> Atualizando...';
+
+    const resp = await API.post('/config/update-all', { pin: APP.pin });
+    btn.disabled = false;
+
+    if (resp && resp.success) {
+        resultDiv.innerHTML = `<span class="text-success">${resp.message}</span>`;
+    } else {
+        resultDiv.innerHTML = '<span class="text-danger">Erro na atualização</span>';
+    }
+}
+
+async function changePin() {
+    const newPin = document.getElementById('cfg-new-pin').value;
+    const resultDiv = document.getElementById('cfg-pin-result');
+
+    if (!newPin) {
+        resultDiv.innerHTML = '<span class="text-warning">Digite o novo PIN</span>';
+        return;
+    }
+
+    const resp = await API.post('/config/change-pin', { old_pin: APP.pin, new_pin: newPin });
+    if (resp && resp.success) {
+        APP.pin = newPin;
+        resultDiv.innerHTML = '<span class="text-success">PIN alterado!</span>';
+    } else {
+        resultDiv.innerHTML = '<span class="text-danger">Erro ao alterar PIN</span>';
+    }
+}
+
+async function deleteAsset(ticker) {
+    if (!confirm(`Remover ${ticker} e todos os seus dados?`)) return;
+    await API.del(`/config/asset/${ticker}?pin=${APP.pin}`);
+    renderConfig();
+}
+
+function logout() {
+    APP.pin = null;
+    renderConfig();
+}
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Setup navigation
+    document.querySelectorAll('.nav-link[data-page]').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            navigate(link.dataset.page);
+        });
+    });
+
+    // Initial page
+    navigate('dashboard');
+});
