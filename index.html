@@ -3,59 +3,92 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trade Halley - Plataforma de Back-Tests</title>
-    <meta name="description" content="Trade Halley - Sistema profissional de back-tests para B3 e BMF">
-    <meta name="theme-color" content="#0a0e17">
+    <title>Trade Halley</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <div id="loadingOverlay" class="loading-overlay active">
-        <div class="loading-spinner"><div class="spinner"></div><p class="loading-text">Carregando Trade Halley...</p></div>
+    <!-- Loading overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p>Carregando Trade Halley...</p>
+        </div>
     </div>
+
+    <!-- Toast container -->
     <div id="toastContainer" class="toast-container"></div>
-    <div id="sidebarOverlay" class="sidebar-overlay"></div>
 
-    <aside id="sidebar" class="sidebar">
-        <div class="sidebar-header">
-            <div class="sidebar-logo"><div class="logo-icon">TH</div><span class="logo-text">Trade Halley</span></div>
-            <button id="sidebarClose" class="menu-toggle" style="display:none"><i class="fas fa-times"></i></button>
-        </div>
-        <nav class="sidebar-nav">
-            <div class="nav-section">
-                <div class="nav-section-title">Principal</div>
-                <a href="#" class="nav-item active" data-page="dashboard"><i class="fas fa-tachometer-alt"></i><span>Dashboard</span></a>
+    <!-- App layout -->
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Trade Halley</span>
+                </div>
+                <button class="sidebar-close" id="sidebarClose">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <div class="nav-section">
-                <div class="nav-section-title">Back-Tests</div>
-                <a href="#" class="nav-item" data-page="b3-daily"><i class="fas fa-chart-bar"></i><span>B3 Daily</span></a>
-                <a href="#" class="nav-item" data-page="b3-intraday"><i class="fas fa-chart-area"></i><span>B3 Intraday</span></a>
-                <a href="#" class="nav-item" data-page="bmf-intraday"><i class="fas fa-exchange-alt"></i><span>BMF Intraday</span></a>
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-page="dashboard">
+                    <i class="fas fa-tachometer-alt"></i><span>Dashboard</span>
+                </a>
+                <a href="#" class="nav-item" data-page="b3daily">
+                    <i class="fas fa-chart-bar"></i><span>B3 Daily</span>
+                </a>
+                <a href="#" class="nav-item" data-page="b3intraday">
+                    <i class="fas fa-bolt"></i><span>B3 Intraday</span>
+                </a>
+                <a href="#" class="nav-item" data-page="bmfintraday">
+                    <i class="fas fa-exchange-alt"></i><span>BMF Intraday</span>
+                </a>
+                <a href="#" class="nav-item" data-page="strategies">
+                    <i class="fas fa-brain"></i><span>Estratégias</span>
+                </a>
+                <a href="#" class="nav-item" data-page="saved">
+                    <i class="fas fa-bookmark"></i><span>Backtests Salvos</span>
+                </a>
+                <a href="#" class="nav-item" data-page="config">
+                    <i class="fas fa-cog"></i><span>Configurações</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="market-status" id="marketStatus">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Verificando...</span>
+                </div>
             </div>
-            <div class="nav-section">
-                <div class="nav-section-title">Gestão</div>
-                <a href="#" class="nav-item" data-page="strategies"><i class="fas fa-brain"></i><span>Estratégias</span></a>
-                <a href="#" class="nav-item" data-page="saved-backtests"><i class="fas fa-save"></i><span>Backtests Salvos</span></a>
-                <a href="#" class="nav-item" data-page="config"><i class="fas fa-cog"></i><span>Configurações</span></a>
-            </div>
-        </nav>
-        <div class="sidebar-footer">
-            <div class="storage-indicator" id="storageIndicator"><i class="fas fa-database"></i><span id="storageText">Carregando...</span></div>
-            <div class="version">Trade Halley v2.0</div>
-        </div>
-    </aside>
+        </aside>
 
-    <main class="main-content">
-        <header class="top-header">
-            <div class="header-left"><button id="menuToggle" class="menu-toggle"><i class="fas fa-bars"></i></button><h1 class="page-title" id="pageTitle">Dashboard</h1></div>
-            <div class="header-right"><div class="market-status" id="marketStatus"><span class="status-dot"></span><span>Verificando...</span></div></div>
-        </header>
-        <div id="pageContent" class="page-content"></div>
-    </main>
+        <!-- Main content -->
+        <main class="main-content">
+            <header class="main-header">
+                <button class="menu-toggle" id="menuToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="header-info">
+                    <h1 id="pageTitle">Dashboard</h1>
+                    <span class="header-subtitle" id="pageSubtitle">Visão geral do mercado</span>
+                </div>
+                <div class="header-actions">
+                    <div class="storage-indicator" id="storageIndicator" title="Supabase Storage">
+                        <i class="fas fa-database"></i>
+                        <span id="storageCount">...</span>
+                    </div>
+                </div>
+            </header>
+            <div class="page-content" id="pageContent">
+                <!-- Dynamic content -->
+            </div>
+        </main>
+    </div>
 
     <script src="js/utils.js"></script>
     <script src="js/api.js"></script>
