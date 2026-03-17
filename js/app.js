@@ -55,6 +55,23 @@ async function brapiGet(endpoint, params = {}) {
     } catch (e) { console.error(`BRAPI ${endpoint}:`, e); return null; }
 }
 
+// ─── Fetch ALL tickers from BRAPI for a given type ───
+async function fetchAllBrapiTickers(type) {
+    // type: "stock" | "fund" | "bdr"
+    let tickers = [];
+    let page = 1;
+    let hasMore = true;
+    while (hasMore) {
+        const data = await brapiGet("/quote/list", { type: type, limit: 100, page: page });
+        if (!data || !data.stocks || data.stocks.length === 0) { hasMore = false; break; }
+        data.stocks.forEach(s => tickers.push(s.stock));
+        hasMore = data.hasNextPage || false;
+        page++;
+        if (page > 50) break; // safety limit
+    }
+    return tickers;
+}
+
 // ─── Navigation ───
 let currentPage = "dashboard";
 
@@ -161,8 +178,8 @@ function sortTable(tableId, colIdx) {
     rows.sort((a, b) => {
         let aVal = a.cells[colIdx]?.textContent?.trim() || "";
         let bVal = b.cells[colIdx]?.textContent?.trim() || "";
-        let aNum = parseFloat(aVal.replace(/[R$%,\s]/g, "").replace(",", "."));
-        let bNum = parseFloat(bVal.replace(/[R$%,\s]/g, "").replace(",", "."));
+        let aNum = parseFloat(aVal.replace(/[R$%\s]/g, "").replace(/\./g, "").replace(",", "."));
+        let bNum = parseFloat(bVal.replace(/[R$%\s]/g, "").replace(/\./g, "").replace(",", "."));
         if (!isNaN(aNum) && !isNaN(bNum)) return dir === "asc" ? aNum - bNum : bNum - aNum;
         return dir === "asc" ? aVal.localeCompare(bVal, "pt-BR") : bVal.localeCompare(aVal, "pt-BR");
     });
@@ -271,8 +288,8 @@ async function loadSavedPage() {
     data.backtests.forEach(bt => {
         html += `<tr>
             <td>${bt.ticker||bt.result?.ticker||""}</td>
-            <td>${bt.entry_strategy_name||bt.strategy_name||bt.result?.entry_strategy_name||""}</td>
-            <td>${fmtPct(bt.resultado_pct||bt.metrics?.resultado_pct||bt.result?.metrics?.resultado_pct)}</td>
+            <td>${bt.entry_strategy_name||bt.strategy_name||bt.strategy||bt.result?.entry_strategy_name||""}</td>
+            <td>${fmtPct(bt.resultado_pct||bt.total_return_pct||bt.metrics?.resultado_pct||bt.result?.metrics?.resultado_pct)}</td>
             <td>${bt.saved_at||""}</td>
             <td><button class="btn btn-outline-danger btn-sm" onclick="deleteSavedBacktest('${bt.id}')"><i class="fas fa-trash"></i></button></td>
         </tr>`;
@@ -295,13 +312,11 @@ let configAuthenticated = false;
 async function loadConfigPage() {
     const savedPin = getStoredPin();
 
-    // Se já autenticou nesta sessão, mostra direto
     if (configAuthenticated && savedPin) {
         showConfigPanel();
         return;
     }
 
-    // Se tem PIN salvo, tenta auto-verificar
     if (savedPin) {
         const result = await apiPost("/config/verify-pin", { pin: savedPin });
         if (result && result.valid) {
@@ -309,12 +324,10 @@ async function loadConfigPage() {
             showConfigPanel();
             return;
         } else {
-            // PIN salvo inválido, limpa
             localStorage.removeItem("config_pin");
         }
     }
 
-    // Mostra tela de login
     document.getElementById("config-login-screen").style.display = "block";
     document.getElementById("config-panel").style.display = "none";
     document.getElementById("config-pin-input")?.focus();
@@ -360,14 +373,87 @@ async function showConfigPanel() {
     const stats = await apiGet("/storage/stats");
     const statsDiv = document.getElementById("config-stats");
     if (statsDiv && stats) {
+        const lastUpdate = stats.last_auto_update ? new Date(stats.last_auto_update).toLocaleString("pt-BR") : "Nunca";
         statsDiv.innerHTML = `<div class="stats-grid">
+            <div class="stat-mini"><div class="stat-val">${stats.total_assets||0}</div><div class="stat-lbl">Total Ativos</div></div>
             <div class="stat-mini"><div class="stat-val">${stats.daily_assets||0}</div><div class="stat-lbl">Ativos Diários</div></div>
             <div class="stat-mini"><div class="stat-val">${stats.intraday_assets||0}</div><div class="stat-lbl">Ativos Intraday</div></div>
             <div class="stat-mini"><div class="stat-val">${(stats.total_records||0).toLocaleString("pt-BR")}</div><div class="stat-lbl">Total Registros</div></div>
             <div class="stat-mini"><div class="stat-val">${stats.total_backtests||0}</div><div class="stat-lbl">Backtests Salvos</div></div>
-            <div class="stat-mini"><div class="stat-val">${stats.storage_type||"supabase"}</div><div class="stat-lbl">Storage</div></div>
+            <div class="stat-mini"><div class="stat-val">${lastUpdate}</div><div class="stat-lbl">Última Atualização</div></div>
         </div>`;
     }
+
+    // Load assets table from Supabase
+    loadConfigAssetsTable();
+}
+
+async function loadConfigAssetsTable() {
+    const container = document.getElementById("config-assets-table");
+    if (!container) return;
+
+    const assetsData = await apiGet("/config/assets");
+    const assets = assetsData?.assets || [];
+
+    if (assets.length === 0) {
+        container.innerHTML = '<div class="no-assets-msg"><i class="fas fa-inbox"></i><p>Nenhum ativo armazenado no Supabase.<br>Use "Baixar Dados" acima para começar.</p></div>';
+        return;
+    }
+
+    let html = `<div class="assets-stored-table"><div class="table-responsive">
+    <table class="table table-dark table-sm" id="config-assets-tbl">
+    <thead><tr>
+        <th>Ticker</th><th>Nome</th><th>Última Atualização</th>
+        <th>Data Início</th><th>Data Fim</th><th>Timeframe</th><th>Registros</th>
+    </tr></thead><tbody>`;
+
+    assets.forEach(a => {
+        const lastUpd = a.last_update ? new Date(a.last_update).toLocaleString("pt-BR") : "—";
+        const dailyStart = a.daily_start || "—";
+        const dailyEnd = a.daily_end || "—";
+        const intraStart = a.intraday_start || "";
+        const intraEnd = a.intraday_end || "";
+        const dailyRec = a.daily_records || 0;
+        const intraRec = a.intraday_records || 0;
+
+        // Show daily row if has daily data
+        if (dailyRec > 0) {
+            html += `<tr>
+                <td><strong>${a.ticker||""}</strong></td>
+                <td>${a.name||"—"}</td>
+                <td>${lastUpd}</td>
+                <td>${dailyStart}</td>
+                <td>${dailyEnd}</td>
+                <td>Diário</td>
+                <td>${dailyRec.toLocaleString("pt-BR")}</td>
+            </tr>`;
+        }
+        // Show intraday row if has intraday data
+        if (intraRec > 0) {
+            html += `<tr>
+                <td><strong>${a.ticker||""}</strong></td>
+                <td>${a.name||"—"}</td>
+                <td>${lastUpd}</td>
+                <td>${intraStart||"—"}</td>
+                <td>${intraEnd||"—"}</td>
+                <td>Intraday</td>
+                <td>${intraRec.toLocaleString("pt-BR")}</td>
+            </tr>`;
+        }
+        // If neither, show basic row
+        if (dailyRec === 0 && intraRec === 0) {
+            html += `<tr>
+                <td><strong>${a.ticker||""}</strong></td>
+                <td>${a.name||"—"}</td>
+                <td>${lastUpd}</td>
+                <td>—</td><td>—</td><td>—</td><td>0</td>
+            </tr>`;
+        }
+    });
+
+    html += `</tbody></table></div></div>`;
+    container.innerHTML = html;
+    makeSortable("config-assets-tbl");
 }
 
 function saveBrapiToken() {
@@ -425,22 +511,12 @@ async function downloadAllAssets() {
     if (progressBar) progressBar.style.width = "0%";
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Baixando...'; }
 
-    // Fetch ticker list from BRAPI
     let tickers = [];
     try {
         let brapiType = assetType;
         if (assetType === "etf") brapiType = "stock";
 
-        let page = 1;
-        let hasMore = true;
-        while (hasMore) {
-            const data = await brapiGet("/quote/list", { type: brapiType, limit: 100, page: page });
-            if (!data || !data.stocks || data.stocks.length === 0) { hasMore = false; break; }
-            data.stocks.forEach(s => tickers.push(s.stock));
-            hasMore = data.hasNextPage || false;
-            page++;
-            if (page > 20) break;
-        }
+        tickers = await fetchAllBrapiTickers(brapiType);
 
         // Filter by asset type
         if (assetType === "etf") {
@@ -448,7 +524,6 @@ async function downloadAllAssets() {
         } else if (assetType === "stock") {
             tickers = tickers.filter(t => !t.endsWith("11") && !t.endsWith("F"));
         }
-        // fund and bdr already come filtered from brapi
     } catch (e) {
         if (progressLog) progressLog.innerHTML = `<div class="log-error">Erro ao buscar lista: ${e.message}</div>`;
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-download"></i> Baixar Dados'; }
@@ -537,13 +612,14 @@ async function updateAllAssets() {
     for (let i = 0; i < assets.length; i++) {
         const asset = assets[i];
         const ticker = asset.ticker || asset;
-        const lastUpdate = asset.last_update ? asset.last_update.split("T")[0] : "";
+        const lastDate = asset.daily_end || asset.intraday_end || asset.last_update || "";
+        const startFrom = lastDate ? lastDate.split("T")[0] : "";
 
         try {
             const result = await apiPost("/config/download-data", {
                 pin: pin,
                 ticker: ticker,
-                start_date: lastUpdate || "",
+                start_date: startFrom,
                 end_date: today,
                 timeframe: asset.timeframe || timeframe,
             });
@@ -615,9 +691,29 @@ async function runDailyBacktest() {
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...'; }
 
     const body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction, variation_pct: variationPct, start_date: startDate || null, end_date: endDate || null };
-    if (tickersInput) body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
-    else if (market && market !== "custom") body.market = market;
-    else body.market = "b3";
+
+    if (tickersInput) {
+        body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
+    } else if (market === "b3" || market === "" || market === undefined) {
+        // Fetch ALL B3 stock tickers from BRAPI instead of using the hardcoded 30
+        try {
+            const allTickers = await fetchAllBrapiTickers("stock");
+            // Filter out ETFs (ending in 11) and fractional (ending in F)
+            const stockTickers = allTickers.filter(t => !t.endsWith("11") && !t.endsWith("F"));
+            if (stockTickers.length > 0) {
+                body.tickers = stockTickers;
+            } else {
+                body.market = "b3"; // fallback
+            }
+        } catch (e) {
+            console.error("Failed to fetch all tickers, falling back to market=b3:", e);
+            body.market = "b3";
+        }
+    } else if (market !== "custom") {
+        body.market = market;
+    } else {
+        body.market = "b3";
+    }
 
     const result = await apiPost("/backtest/daily", body);
     if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
@@ -659,9 +755,27 @@ async function runIntradayBacktest() {
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...'; }
 
     const body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction, variation_pct: variationPct, hour_start: hourStart, hour_end: hourEnd, period: "3mo", start_date: startDate || null, end_date: endDate || null };
-    if (tickersInput) body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
-    else if (market && market !== "custom") body.market = market;
-    else body.market = "b3";
+
+    if (tickersInput) {
+        body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
+    } else if (market === "b3" || market === "" || market === undefined) {
+        try {
+            const allTickers = await fetchAllBrapiTickers("stock");
+            const stockTickers = allTickers.filter(t => !t.endsWith("11") && !t.endsWith("F"));
+            if (stockTickers.length > 0) {
+                body.tickers = stockTickers;
+            } else {
+                body.market = "b3";
+            }
+        } catch (e) {
+            console.error("Failed to fetch all tickers:", e);
+            body.market = "b3";
+        }
+    } else if (market !== "custom") {
+        body.market = market;
+    } else {
+        body.market = "b3";
+    }
 
     const result = await apiPost("/backtest/intraday", body);
     if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
