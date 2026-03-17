@@ -378,101 +378,153 @@
                 <p>Gerenciamento de dados, token e armazenamento</p>
             </div>
 
-            <!-- Token BRAPI -->
-            <div class="glass-card mb-4">
-                <div class="card-header-custom">
-                    <i class="fas fa-key"></i> Token BRAPI
-                </div>
-                <div class="card-body-custom">
-                    <p class="config-description">Seu token de acesso à API brapi.dev. Se atingir o limite, crie outro em <a href="https://brapi.dev" target="_blank">brapi.dev</a> e cole aqui.</p>
-                    <div class="form-row">
-                        <div class="form-group" style="flex:3">
-                            <label>Token BRAPI</label>
-                            <input type="text" class="form-input" id="config-brapi-token" placeholder="Cole seu token aqui...">
+            <!-- ===== TELA DE LOGIN PIN ===== -->
+            <div id="config-login-screen">
+                <div class="pin-login-container">
+                    <div class="glass-card">
+                        <div class="card-body-custom" style="text-align:center;padding:2.5rem 2rem">
+                            <div class="pin-icon"><i class="fas fa-lock"></i></div>
+                            <h3 class="pin-title">Acesso Restrito</h3>
+                            <p class="pin-subtitle">Digite o PIN para acessar as configurações</p>
+                            <div style="max-width:280px;margin:1.5rem auto 0">
+                                <input type="password" class="form-input pin-input" id="config-pin-input"
+                                       placeholder="••••" maxlength="10"
+                                       onkeydown="if(event.key==='Enter') verifyConfigPin()">
+                                <button class="btn-execute" style="margin-top:1rem" onclick="verifyConfigPin()">
+                                    <i class="fas fa-unlock"></i> Entrar
+                                </button>
+                            </div>
+                            <div id="config-pin-error" class="config-status" style="margin-top:1rem"></div>
                         </div>
-                        <div class="form-group form-action" style="flex:1">
-                            <button class="btn-execute btn-sm" onclick="saveBrapiToken()">
-                                <i class="fas fa-save"></i> Salvar Token
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== CONTEÚDO (escondido até PIN correto) ===== -->
+            <div id="config-panel" style="display:none">
+
+                <!-- Token BRAPI -->
+                <div class="glass-card mb-4">
+                    <div class="card-header-custom">
+                        <i class="fas fa-key"></i> Token BRAPI
+                    </div>
+                    <div class="card-body-custom">
+                        <p class="config-description">Seu token de acesso à API brapi.dev. Se atingir o limite, crie outro em <a href="https://brapi.dev" target="_blank">brapi.dev</a> e cole aqui.</p>
+                        <div class="form-row">
+                            <div class="form-group" style="flex:3">
+                                <label>Token BRAPI</label>
+                                <input type="text" class="form-input" id="config-brapi-token" placeholder="Cole seu token aqui...">
+                            </div>
+                            <div class="form-group form-action" style="flex:1">
+                                <button class="btn-execute btn-sm" onclick="saveBrapiToken()">
+                                    <i class="fas fa-save"></i> Salvar Token
+                                </button>
+                            </div>
+                        </div>
+                        <div id="config-token-status" class="config-status"></div>
+                    </div>
+                </div>
+
+                <!-- Download de Dados -->
+                <div class="glass-card mb-4">
+                    <div class="card-header-custom">
+                        <i class="fas fa-download"></i> Download de Dados
+                    </div>
+                    <div class="card-body-custom">
+                        <p class="config-description">Baixe dados históricos dos ativos e armazene no Supabase. Selecione o tipo, período e timeframe.</p>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Tipo de Ativo</label>
+                                <select class="form-input" id="config-asset-type">
+                                    <option value="stock">Ações</option>
+                                    <option value="fund">FIIs</option>
+                                    <option value="bdr">BDRs</option>
+                                    <option value="etf">ETFs</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Timeframe</label>
+                                <select class="form-input" id="config-timeframe">
+                                    <option value="daily" selected>Diário</option>
+                                    <option value="intraday">Intraday (15min)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Data Início</label>
+                                <input type="date" class="form-input" id="config-start-date">
+                            </div>
+                            <div class="form-group">
+                                <label>Data Fim</label>
+                                <input type="date" class="form-input" id="config-end-date">
+                            </div>
+                        </div>
+
+                        <div class="form-row" style="gap:0.5rem">
+                            <button class="btn-execute" id="config-download-btn" onclick="downloadAllAssets()">
+                                <i class="fas fa-download"></i> Baixar Dados
+                            </button>
+                            <button class="btn-execute btn-update" id="config-update-btn" onclick="updateAllAssets()">
+                                <i class="fas fa-sync-alt"></i> Atualizar Dados
                             </button>
                         </div>
-                    </div>
-                    <div id="config-token-status" class="config-status"></div>
-                </div>
-            </div>
 
-            <!-- Download de Dados -->
-            <div class="glass-card mb-4">
-                <div class="card-header-custom">
-                    <i class="fas fa-download"></i> Download de Dados
-                </div>
-                <div class="card-body-custom">
-                    <p class="config-description">Baixe dados históricos dos ativos e armazene no Supabase. Selecione o tipo, período e timeframe.</p>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Tipo de Ativo</label>
-                            <select class="form-input" id="config-asset-type">
-                                <option value="stock">Ações</option>
-                                <option value="fund">FIIs</option>
-                                <option value="bdr">BDRs</option>
-                                <option value="etf">ETFs</option>
-                            </select>
+                        <!-- Progress -->
+                        <div id="config-download-progress" class="download-progress" style="display:none">
+                            <div class="progress-header">
+                                <span id="config-progress-label">Baixando...</span>
+                                <span id="config-progress-count">0/0</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar-fill" id="config-progress-bar" style="width:0%"></div>
+                            </div>
+                            <div id="config-progress-log" class="progress-log"></div>
                         </div>
-                        <div class="form-group">
-                            <label>Timeframe</label>
-                            <select class="form-input" id="config-timeframe">
-                                <option value="daily" selected>Diário</option>
-                                <option value="intraday">Intraday (15min)</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Data Início</label>
-                            <input type="date" class="form-input" id="config-start-date">
-                        </div>
-                        <div class="form-group">
-                            <label>Data Fim</label>
-                            <input type="date" class="form-input" id="config-end-date">
-                        </div>
-                    </div>
-
-                    <div class="form-row" style="gap:0.5rem">
-                        <button class="btn-execute" id="config-download-btn" onclick="downloadAllAssets()">
-                            <i class="fas fa-download"></i> Baixar Dados
-                        </button>
-                        <button class="btn-execute btn-update" id="config-update-btn" onclick="updateAllAssets()">
-                            <i class="fas fa-sync-alt"></i> Atualizar Dados
-                        </button>
-                    </div>
-
-                    <!-- Progress -->
-                    <div id="config-download-progress" class="download-progress" style="display:none">
-                        <div class="progress-header">
-                            <span id="config-progress-label">Baixando...</span>
-                            <span id="config-progress-count">0/0</span>
-                        </div>
-                        <div class="progress-bar-container">
-                            <div class="progress-bar-fill" id="config-progress-bar" style="width:0%"></div>
-                        </div>
-                        <div id="config-progress-log" class="progress-log"></div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Estatísticas -->
-            <div class="glass-card">
-                <div class="card-header-custom">
-                    <i class="fas fa-database"></i> Armazenamento Supabase
-                </div>
-                <div class="card-body-custom">
-                    <div id="config-stats">
-                        <div class="loading-state"><div class="spinner"></div><p>Carregando estatísticas...</p></div>
+                <!-- Alterar PIN -->
+                <div class="glass-card mb-4">
+                    <div class="card-header-custom">
+                        <i class="fas fa-shield-alt"></i> Alterar PIN
+                    </div>
+                    <div class="card-body-custom">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>PIN Atual</label>
+                                <input type="password" class="form-input" id="config-old-pin" placeholder="PIN atual">
+                            </div>
+                            <div class="form-group">
+                                <label>Novo PIN</label>
+                                <input type="password" class="form-input" id="config-new-pin" placeholder="Novo PIN">
+                            </div>
+                            <div class="form-group form-action">
+                                <button class="btn-execute btn-sm" style="background:linear-gradient(135deg,#ffd32a,#f0a500);color:#000" onclick="changeConfigPin()">
+                                    <i class="fas fa-key"></i> Alterar
+                                </button>
+                            </div>
+                        </div>
+                        <div id="config-pin-change-status" class="config-status"></div>
                     </div>
                 </div>
-            </div>
-        </div>
+
+                <!-- Estatísticas -->
+                <div class="glass-card">
+                    <div class="card-header-custom">
+                        <i class="fas fa-database"></i> Armazenamento Supabase
+                    </div>
+                    <div class="card-body-custom">
+                        <div id="config-stats">
+                            <div class="loading-state"><div class="spinner"></div><p>Carregando estatísticas...</p></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div><!-- /config-panel -->
+        </div><!-- /page-config -->
 
     </div><!-- /main-content -->
 </div><!-- /app-layout -->
