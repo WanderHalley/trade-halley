@@ -1,29 +1,24 @@
 // ============================================================
 // js/app.js — Trade Halley Frontend v3.2
 // SPA: Dashboard, B3 Daily, B3 Intraday, BMF Intraday,
-//      Estratégias, Salvos, Config (com download e token BRAPI)
+//      Estratégias, Salvos, Config (PIN + token BRAPI + download)
 // ============================================================
 
 const API_BASE = "https://wanderhalleylee-trade-halley.hf.space";
 
-// ─── Token BRAPI (localStorage) ───
-function getBrapiToken() {
-    return localStorage.getItem("brapi_token") || "ktC3hLVgH3QXrFnssfbcUj";
-}
-function setBrapiToken(token) {
-    localStorage.setItem("brapi_token", token);
-}
+// ─── Stored credentials (localStorage) ───
+function getBrapiToken() { return localStorage.getItem("brapi_token") || "ktC3hLVgH3QXrFnssfbcUj"; }
+function setBrapiToken(token) { localStorage.setItem("brapi_token", token); }
+function getStoredPin() { return localStorage.getItem("config_pin") || ""; }
+function setStoredPin(pin) { localStorage.setItem("config_pin", pin); }
 
-// ─── API Helper ───
+// ─── API Helpers ───
 async function apiGet(path) {
     try {
         const resp = await fetch(`${API_BASE}${path}`);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         return await resp.json();
-    } catch (e) {
-        console.error(`GET ${path}:`, e);
-        return null;
-    }
+    } catch (e) { console.error(`GET ${path}:`, e); return null; }
 }
 
 async function apiPost(path, body) {
@@ -38,10 +33,7 @@ async function apiPost(path, body) {
             throw new Error(`HTTP ${resp.status}: ${txt}`);
         }
         return await resp.json();
-    } catch (e) {
-        console.error(`POST ${path}:`, e);
-        return null;
-    }
+    } catch (e) { console.error(`POST ${path}:`, e); return null; }
 }
 
 async function apiDelete(path) {
@@ -49,10 +41,7 @@ async function apiDelete(path) {
         const resp = await fetch(`${API_BASE}${path}`, { method: "DELETE" });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         return await resp.json();
-    } catch (e) {
-        console.error(`DELETE ${path}:`, e);
-        return null;
-    }
+    } catch (e) { console.error(`DELETE ${path}:`, e); return null; }
 }
 
 // ─── BRAPI Direct ───
@@ -63,10 +52,7 @@ async function brapiGet(endpoint, params = {}) {
         const resp = await fetch(`https://brapi.dev/api${endpoint}?${qs}`);
         if (!resp.ok) throw new Error(`BRAPI ${resp.status}`);
         return await resp.json();
-    } catch (e) {
-        console.error(`BRAPI ${endpoint}:`, e);
-        return null;
-    }
+    } catch (e) { console.error(`BRAPI ${endpoint}:`, e); return null; }
 }
 
 // ─── Navigation ───
@@ -82,7 +68,6 @@ function navigate(page) {
     const navLink = document.querySelector(`.nav-link[data-page="${page}"]`);
     if (navLink) navLink.classList.add("active");
 
-    // Close mobile sidebar
     document.getElementById("sidebar")?.classList.remove("open");
 
     switch (page) {
@@ -113,8 +98,7 @@ function fmtVol(val) {
 function getTodayStr() { return new Date().toISOString().split("T")[0]; }
 
 function getDefaultStartDate() {
-    const d = new Date();
-    d.setFullYear(d.getFullYear(), 0, 1);
+    const d = new Date(); d.setFullYear(d.getFullYear(), 0, 1);
     return d.toISOString().split("T")[0];
 }
 
@@ -137,13 +121,11 @@ let sortState = {};
 function makeSortable(tableId) {
     const table = document.getElementById(tableId);
     if (!table) return;
-    const headers = table.querySelectorAll("thead th");
-    headers.forEach((th, colIdx) => {
+    table.querySelectorAll("thead th").forEach((th, colIdx) => {
         th.style.cursor = "pointer";
         th.style.userSelect = "none";
         th.style.whiteSpace = "nowrap";
-        const oldArrow = th.querySelector(".sort-arrow");
-        if (oldArrow) oldArrow.remove();
+        const old = th.querySelector(".sort-arrow"); if (old) old.remove();
         const arrow = document.createElement("span");
         arrow.className = "sort-arrow";
         arrow.style.marginLeft = "6px";
@@ -193,15 +175,12 @@ function setupDirectionButtons(buyBtnId, sellBtnId, hiddenFieldId) {
     const sellBtn = document.getElementById(sellBtnId);
     const hidden = document.getElementById(hiddenFieldId);
     if (!buyBtn || !sellBtn) return;
-
     buyBtn.addEventListener("click", () => {
-        buyBtn.classList.add("active-dir");
-        sellBtn.classList.remove("active-dir");
+        buyBtn.classList.add("active-dir"); sellBtn.classList.remove("active-dir");
         if (hidden) hidden.value = "compra";
     });
     sellBtn.addEventListener("click", () => {
-        sellBtn.classList.add("active-dir");
-        buyBtn.classList.remove("active-dir");
+        sellBtn.classList.add("active-dir"); buyBtn.classList.remove("active-dir");
         if (hidden) hidden.value = "venda";
     });
 }
@@ -255,7 +234,6 @@ async function loadStrategiesPage() {
     if (!data) { container.innerHTML = '<p class="text-muted">Erro ao carregar estratégias.</p>'; return; }
 
     let html = "";
-
     function buildSection(icon, title, items, cols) {
         if (!items || items.length === 0) return "";
         let h = `<div class="strategy-section"><div class="strategy-section-title"><i class="fas fa-${icon}"></i> ${title} (${items.length})</div>`;
@@ -263,23 +241,18 @@ async function loadStrategiesPage() {
         cols.forEach(c => { h += `<th>${c}</th>`; });
         h += `</tr></thead><tbody>`;
         items.forEach(s => {
-            h += `<tr>`;
-            h += `<td><strong>${s.name||""}</strong></td>`;
-            h += `<td>${s.description||""}</td>`;
-            h += `<td>${s.category||""}</td>`;
+            h += `<tr><td><strong>${s.name||""}</strong></td><td>${s.description||""}</td><td>${s.category||""}</td>`;
             if (cols.length > 3) h += `<td>${(s.requires||[]).join(", ")||"—"}</td>`;
             h += `</tr>`;
         });
         h += `</tbody></table></div></div>`;
         return h;
     }
-
     html += buildSection("wave-square", "Indicadores Técnicos", data.indicator_strategies, ["Nome","Descrição","Categoria"]);
     html += buildSection("sign-in-alt", "Entrada Diário", data.daily_entry, ["Nome","Descrição","Categoria","Requer"]);
     html += buildSection("sign-out-alt", "Saída Diário", data.daily_exit, ["Nome","Descrição","Categoria"]);
     html += buildSection("sign-in-alt", "Entrada Intraday", data.intraday_entry, ["Nome","Descrição","Categoria","Requer"]);
     html += buildSection("sign-out-alt", "Saída Intraday", data.intraday_exit, ["Nome","Descrição","Categoria","Requer"]);
-
     container.innerHTML = html;
 }
 
@@ -291,8 +264,7 @@ async function loadSavedPage() {
     const container = document.getElementById("saved-container");
     if (!container) return;
     if (!data || !data.backtests || data.backtests.length === 0) {
-        container.innerHTML = '<p class="text-muted">Nenhum backtest salvo.</p>';
-        return;
+        container.innerHTML = '<p class="text-muted">Nenhum backtest salvo.</p>'; return;
     }
     let html = `<div class="table-responsive"><table class="table table-dark table-sm"><thead><tr>
     <th>Ticker</th><th>Estratégia</th><th>Resultado</th><th>Data</th><th>Ações</th></tr></thead><tbody>`;
@@ -316,9 +288,64 @@ async function deleteSavedBacktest(id) {
 }
 
 // ============================================================
-// CONFIG PAGE
+// CONFIG PAGE — PIN LOGIN
 // ============================================================
+let configAuthenticated = false;
+
 async function loadConfigPage() {
+    const savedPin = getStoredPin();
+
+    // Se já autenticou nesta sessão, mostra direto
+    if (configAuthenticated && savedPin) {
+        showConfigPanel();
+        return;
+    }
+
+    // Se tem PIN salvo, tenta auto-verificar
+    if (savedPin) {
+        const result = await apiPost("/config/verify-pin", { pin: savedPin });
+        if (result && result.valid) {
+            configAuthenticated = true;
+            showConfigPanel();
+            return;
+        } else {
+            // PIN salvo inválido, limpa
+            localStorage.removeItem("config_pin");
+        }
+    }
+
+    // Mostra tela de login
+    document.getElementById("config-login-screen").style.display = "block";
+    document.getElementById("config-panel").style.display = "none";
+    document.getElementById("config-pin-input")?.focus();
+}
+
+async function verifyConfigPin() {
+    const pinInput = document.getElementById("config-pin-input");
+    const errorDiv = document.getElementById("config-pin-error");
+    const pin = pinInput?.value?.trim();
+
+    if (!pin) {
+        if (errorDiv) { errorDiv.className = "config-status error"; errorDiv.textContent = "Digite o PIN."; }
+        return;
+    }
+
+    const result = await apiPost("/config/verify-pin", { pin });
+    if (result && result.valid) {
+        configAuthenticated = true;
+        setStoredPin(pin);
+        if (errorDiv) { errorDiv.className = "config-status"; errorDiv.style.display = "none"; }
+        showConfigPanel();
+    } else {
+        if (errorDiv) { errorDiv.className = "config-status error"; errorDiv.textContent = "PIN incorreto. Tente novamente."; }
+        if (pinInput) { pinInput.value = ""; pinInput.focus(); }
+    }
+}
+
+async function showConfigPanel() {
+    document.getElementById("config-login-screen").style.display = "none";
+    document.getElementById("config-panel").style.display = "block";
+
     // Load saved token
     const tokenInput = document.getElementById("config-brapi-token");
     if (tokenInput) tokenInput.value = getBrapiToken();
@@ -351,11 +378,35 @@ function saveBrapiToken() {
         return;
     }
     setBrapiToken(input.value.trim());
-    if (status) { status.className = "config-status success"; status.textContent = "Token salvo com sucesso! Será usado em todas as requisições."; }
+    if (status) { status.className = "config-status success"; status.textContent = "Token salvo com sucesso!"; }
+}
+
+async function changeConfigPin() {
+    const oldPin = document.getElementById("config-old-pin")?.value?.trim();
+    const newPin = document.getElementById("config-new-pin")?.value?.trim();
+    const status = document.getElementById("config-pin-change-status");
+
+    if (!oldPin || !newPin) {
+        if (status) { status.className = "config-status error"; status.textContent = "Preencha ambos os campos."; }
+        return;
+    }
+
+    const result = await apiPost("/config/change-pin", { old_pin: oldPin, new_pin: newPin });
+    if (result && result.success) {
+        setStoredPin(newPin);
+        if (status) { status.className = "config-status success"; status.textContent = "PIN alterado com sucesso!"; }
+        document.getElementById("config-old-pin").value = "";
+        document.getElementById("config-new-pin").value = "";
+    } else {
+        if (status) { status.className = "config-status error"; status.textContent = "Erro: PIN atual incorreto ou falha no servidor."; }
+    }
 }
 
 // ─── Download All Assets by Type ───
 async function downloadAllAssets() {
+    const pin = getStoredPin();
+    if (!pin) { alert("PIN não encontrado. Faça login novamente."); return; }
+
     const assetType = document.getElementById("config-asset-type")?.value || "stock";
     const timeframe = document.getElementById("config-timeframe")?.value || "daily";
     const startDate = document.getElementById("config-start-date")?.value || "";
@@ -371,12 +422,12 @@ async function downloadAllAssets() {
     if (progressDiv) progressDiv.style.display = "block";
     if (progressLog) progressLog.innerHTML = "";
     if (progressLabel) progressLabel.textContent = "Buscando lista de ativos...";
+    if (progressBar) progressBar.style.width = "0%";
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Baixando...'; }
 
     // Fetch ticker list from BRAPI
     let tickers = [];
     try {
-        // ETFs are type "stock" but ticker ends with "11" — we filter them
         let brapiType = assetType;
         if (assetType === "etf") brapiType = "stock";
 
@@ -388,18 +439,16 @@ async function downloadAllAssets() {
             data.stocks.forEach(s => tickers.push(s.stock));
             hasMore = data.hasNextPage || false;
             page++;
-            if (page > 20) break; // safety
+            if (page > 20) break;
         }
 
         // Filter by asset type
         if (assetType === "etf") {
-            // ETFs end with 11 and are not FIIs (FIIs are type "fund")
-            const etfPatterns = ["BOVA11","IVVB11","HASH11","SMAL11","DIVO11","FIND11","GOLD11","ECOO11","PIBB11","NASD11","BOVV11","XFIX11","BRAX11"];
-            tickers = tickers.filter(t => t.endsWith("11") || etfPatterns.includes(t));
+            tickers = tickers.filter(t => t.endsWith("11"));
         } else if (assetType === "stock") {
-            // Remove tickers that end with 11 (likely ETFs/FIIs) and F suffix (fractional)
             tickers = tickers.filter(t => !t.endsWith("11") && !t.endsWith("F"));
         }
+        // fund and bdr already come filtered from brapi
     } catch (e) {
         if (progressLog) progressLog.innerHTML = `<div class="log-error">Erro ao buscar lista: ${e.message}</div>`;
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-download"></i> Baixar Dados'; }
@@ -407,7 +456,7 @@ async function downloadAllAssets() {
     }
 
     if (tickers.length === 0) {
-        if (progressLog) progressLog.innerHTML = `<div class="log-error">Nenhum ativo encontrado para o tipo "${assetType}".</div>`;
+        if (progressLog) progressLog.innerHTML = `<div class="log-error">Nenhum ativo encontrado para "${assetType}".</div>`;
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-download"></i> Baixar Dados'; }
         return;
     }
@@ -415,14 +464,13 @@ async function downloadAllAssets() {
     if (progressLabel) progressLabel.textContent = `Baixando ${tickers.length} ativos...`;
     if (progressCount) progressCount.textContent = `0/${tickers.length}`;
 
-    let successCount = 0;
-    let errorCount = 0;
+    let successCount = 0, errorCount = 0;
 
     for (let i = 0; i < tickers.length; i++) {
         const ticker = tickers[i];
         try {
             const result = await apiPost("/config/download-data", {
-                pin: "1234",
+                pin: pin,
                 ticker: ticker,
                 start_date: startDate,
                 end_date: endDate,
@@ -444,20 +492,19 @@ async function downloadAllAssets() {
         if (progressBar) progressBar.style.width = pct + "%";
         if (progressCount) progressCount.textContent = `${i + 1}/${tickers.length}`;
         if (progressLog) progressLog.scrollTop = progressLog.scrollHeight;
-
-        // Small delay to avoid rate limit
         await new Promise(r => setTimeout(r, 300));
     }
 
     if (progressLabel) progressLabel.textContent = `Concluído: ${successCount} ok, ${errorCount} erros`;
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-download"></i> Baixar Dados'; }
-
-    // Refresh stats
-    loadConfigPage();
+    showConfigPanel();
 }
 
 // ─── Update All Assets (incremental) ───
 async function updateAllAssets() {
+    const pin = getStoredPin();
+    if (!pin) { alert("PIN não encontrado. Faça login novamente."); return; }
+
     const timeframe = document.getElementById("config-timeframe")?.value || "daily";
     const progressDiv = document.getElementById("config-download-progress");
     const progressLabel = document.getElementById("config-progress-label");
@@ -468,15 +515,15 @@ async function updateAllAssets() {
 
     if (progressDiv) progressDiv.style.display = "block";
     if (progressLog) progressLog.innerHTML = "";
+    if (progressBar) progressBar.style.width = "0%";
     if (progressLabel) progressLabel.textContent = "Buscando ativos salvos...";
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Atualizando...'; }
 
-    // Get saved assets from API
     const assetsData = await apiGet("/config/assets");
     const assets = assetsData?.assets || [];
 
     if (assets.length === 0) {
-        if (progressLog) progressLog.innerHTML = '<div class="log-info">Nenhum ativo salvo para atualizar. Baixe os dados primeiro.</div>';
+        if (progressLog) progressLog.innerHTML = '<div class="log-info">Nenhum ativo salvo. Baixe os dados primeiro.</div>';
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Atualizar Dados'; }
         return;
     }
@@ -485,8 +532,7 @@ async function updateAllAssets() {
     if (progressCount) progressCount.textContent = `0/${assets.length}`;
 
     const today = getTodayStr();
-    let successCount = 0;
-    let errorCount = 0;
+    let successCount = 0, errorCount = 0;
 
     for (let i = 0; i < assets.length; i++) {
         const asset = assets[i];
@@ -495,7 +541,7 @@ async function updateAllAssets() {
 
         try {
             const result = await apiPost("/config/download-data", {
-                pin: "1234",
+                pin: pin,
                 ticker: ticker,
                 start_date: lastUpdate || "",
                 end_date: today,
@@ -503,7 +549,7 @@ async function updateAllAssets() {
             });
             if (result && result.success) {
                 successCount++;
-                if (progressLog) progressLog.innerHTML += `<div class="log-success">✓ ${ticker} — ${result.records||0} novos registros</div>`;
+                if (progressLog) progressLog.innerHTML += `<div class="log-success">✓ ${ticker} — ${result.records||0} novos</div>`;
             } else {
                 errorCount++;
                 if (progressLog) progressLog.innerHTML += `<div class="log-error">✗ ${ticker} — ${result?.message||"erro"}</div>`;
@@ -517,13 +563,12 @@ async function updateAllAssets() {
         if (progressBar) progressBar.style.width = pct + "%";
         if (progressCount) progressCount.textContent = `${i + 1}/${assets.length}`;
         if (progressLog) progressLog.scrollTop = progressLog.scrollHeight;
-
         await new Promise(r => setTimeout(r, 300));
     }
 
-    if (progressLabel) progressLabel.textContent = `Atualização concluída: ${successCount} ok, ${errorCount} erros`;
+    if (progressLabel) progressLabel.textContent = `Concluído: ${successCount} ok, ${errorCount} erros`;
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Atualizar Dados'; }
-    loadConfigPage();
+    showConfigPanel();
 }
 
 // ============================================================
@@ -571,7 +616,7 @@ async function runDailyBacktest() {
 
     const body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction, variation_pct: variationPct, start_date: startDate || null, end_date: endDate || null };
     if (tickersInput) body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
-    else if (market) body.market = market;
+    else if (market && market !== "custom") body.market = market;
     else body.market = "b3";
 
     const result = await apiPost("/backtest/daily", body);
@@ -615,7 +660,7 @@ async function runIntradayBacktest() {
 
     const body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction, variation_pct: variationPct, hour_start: hourStart, hour_end: hourEnd, period: "3mo", start_date: startDate || null, end_date: endDate || null };
     if (tickersInput) body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
-    else if (market) body.market = market;
+    else if (market && market !== "custom") body.market = market;
     else body.market = "b3";
 
     const result = await apiPost("/backtest/intraday", body);
@@ -717,10 +762,7 @@ function displayResults(containerId, tableId, result) {
 // ============================================================
 document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll(".nav-link[data-page]").forEach(link => {
-        link.addEventListener("click", (e) => {
-            e.preventDefault();
-            navigate(link.dataset.page);
-        });
+        link.addEventListener("click", (e) => { e.preventDefault(); navigate(link.dataset.page); });
     });
     navigate("dashboard");
 });
