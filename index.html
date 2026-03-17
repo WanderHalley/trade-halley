@@ -6,7 +6,7 @@
     <title>Trade Halley — Trade Certo</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="css/style.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
@@ -15,56 +15,53 @@
 <!-- Toast Container -->
 <div class="toast-container" id="toastContainer"></div>
 
-<!-- Loading Overlay -->
-<div class="loading-overlay hidden" id="loadingOverlay">
-    <div class="loading-spinner">
-        <div class="spinner"></div>
-        <p>Carregando...</p>
-    </div>
-</div>
-
 <!-- ════════════════════════════════════════ APP LAYOUT ════════════════════════════════════════ -->
 <div class="app-layout">
 
     <!-- ─── Sidebar ─── -->
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header">
-            <div class="logo"><i class="fas fa-chart-line"></i> Trade Halley</div>
+            <div class="logo">
+                <div class="logo-icon"><i class="fas fa-chart-line"></i></div>
+                <div class="logo-text">
+                    <span class="logo-name">Trade Halley</span>
+                    <span class="logo-version">v3.2</span>
+                </div>
+            </div>
             <button class="sidebar-close" id="sidebarClose"><i class="fas fa-times"></i></button>
         </div>
         <div class="sidebar-nav">
-            <!-- Principal -->
+            <div class="nav-section-label">Principal</div>
             <a href="#" class="nav-link active" data-page="dashboard">
-                <i class="fas fa-tachometer-alt"></i> Dashboard
+                <i class="fas fa-tachometer-alt"></i> <span>Dashboard</span>
             </a>
-            <!-- Back-tests -->
+
+            <div class="nav-section-label">Back-tests</div>
             <a href="#" class="nav-link" data-page="daily">
-                <i class="fas fa-calendar-day"></i> B3 Diário
+                <i class="fas fa-calendar-day"></i> <span>B3 Diário</span>
             </a>
             <a href="#" class="nav-link" data-page="intraday">
-                <i class="fas fa-clock"></i> B3 Intraday
+                <i class="fas fa-clock"></i> <span>B3 Intraday</span>
             </a>
             <a href="#" class="nav-link" data-page="bmf-intraday">
-                <i class="fas fa-exchange-alt"></i> BMF Intraday
+                <i class="fas fa-exchange-alt"></i> <span>BMF Intraday</span>
             </a>
-            <a href="#" class="nav-link" data-page="indicators">
-                <i class="fas fa-wave-square"></i> Indicadores
-            </a>
-            <!-- Ferramentas -->
+
+            <div class="nav-section-label">Ferramentas</div>
             <a href="#" class="nav-link" data-page="strategies">
-                <i class="fas fa-list-check"></i> Estratégias
+                <i class="fas fa-list-check"></i> <span>Estratégias</span>
             </a>
             <a href="#" class="nav-link" data-page="saved">
-                <i class="fas fa-bookmark"></i> Salvos
+                <i class="fas fa-bookmark"></i> <span>Salvos</span>
             </a>
             <a href="#" class="nav-link" data-page="config">
-                <i class="fas fa-cog"></i> Configurações
+                <i class="fas fa-cog"></i> <span>Configurações</span>
             </a>
         </div>
         <div class="sidebar-footer">
             <div class="market-status">
                 <span class="status-dot" id="marketDot"></span>
-                <span id="marketLabel">Trade Certo v3.0</span>
+                <span id="marketLabel">Trade Certo v3.2</span>
             </div>
         </div>
     </nav>
@@ -74,345 +71,404 @@
         <div class="main-header">
             <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
             <div class="header-info">
-                <h1>Trade Halley</h1>
+                <h1><i class="fas fa-chart-line header-icon"></i> Trade Halley</h1>
                 <span class="header-subtitle">Plataforma de Back-tests B3 &amp; BMF</span>
             </div>
         </div>
 
         <!-- ==================== DASHBOARD ==================== -->
         <div class="page-content" id="page-dashboard">
-            <h3 class="mb-3"><i class="fas fa-tachometer-alt text-info"></i> Dashboard</h3>
+            <div class="page-title">
+                <h2><i class="fas fa-tachometer-alt"></i> Dashboard</h2>
+                <p>Visão geral do mercado e sistema</p>
+            </div>
             <div class="row g-3" id="dashboard-stats"></div>
             <div class="row g-3 mt-3" id="dashboard-tickers"></div>
         </div>
 
         <!-- ==================== B3 DIÁRIO ==================== -->
         <div class="page-content d-none" id="page-daily">
-            <h3 class="mb-3"><i class="fas fa-calendar-day text-info"></i> Back-teste B3 — Diário</h3>
-            <div class="backtest-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Mercado / Ativos</label>
-                        <select class="form-input" id="daily-market">
-                            <option value="b3">B3 — Todos</option>
-                            <option value="custom">Ativos específicos</option>
-                        </select>
-                    </div>
-                    <div class="form-group" id="daily-tickers-wrap" style="display:none">
-                        <label>Tickers (separados por vírgula)</label>
-                        <input class="form-input" id="daily-tickers" placeholder="PETR4,VALE3,ITUB4">
-                    </div>
+            <div class="page-title">
+                <h2><i class="fas fa-calendar-day"></i> Back-teste B3 — Diário</h2>
+                <p>Timeframe diário para ações da B3</p>
+            </div>
+            <div class="glass-card">
+                <div class="card-header-custom">
+                    <i class="fas fa-sliders-h"></i> Configuração do Back-teste
                 </div>
+                <div class="card-body-custom">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Mercado / Ativos</label>
+                            <select class="form-input" id="daily-market">
+                                <option value="b3">B3 — Todos</option>
+                                <option value="custom">Ativos específicos</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="daily-tickers-wrap" style="display:none">
+                            <label>Tickers (separados por vírgula)</label>
+                            <input class="form-input" id="daily-tickers" placeholder="PETR4,VALE3,ITUB4">
+                        </div>
+                    </div>
 
-                <!-- Direção -->
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Direção da Operação</label><br>
-                        <button type="button" class="btn btn-success me-2" id="daily-btn-compra">
-                            <i class="fas fa-arrow-up"></i> COMPRA
-                        </button>
-                        <button type="button" class="btn btn-outline-danger" id="daily-btn-venda">
-                            <i class="fas fa-arrow-down"></i> VENDA
-                        </button>
-                        <input type="hidden" id="daily-direction" value="compra">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Direção da Operação</label>
+                            <div class="direction-buttons">
+                                <button type="button" class="btn-dir btn-dir-buy active-dir" id="daily-btn-compra">
+                                    <i class="fas fa-arrow-up"></i> COMPRA
+                                </button>
+                                <button type="button" class="btn-dir btn-dir-sell" id="daily-btn-venda">
+                                    <i class="fas fa-arrow-down"></i> VENDA
+                                </button>
+                            </div>
+                            <input type="hidden" id="daily-direction" value="compra">
+                        </div>
                     </div>
-                </div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Operação de Entrada</label>
-                        <select class="form-input" id="daily-entry-strategy"></select>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Operação de Entrada</label>
+                            <select class="form-input" id="daily-entry-strategy"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Operação de Saída</label>
+                            <select class="form-input" id="daily-exit-strategy"></select>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Operação de Saída</label>
-                        <select class="form-input" id="daily-exit-strategy"></select>
-                    </div>
-                </div>
 
-                <div class="form-row">
-                    <div class="form-group" id="daily-variation-div">
-                        <label>Variação % (ex: -3 para -3%)</label>
-                        <input type="number" class="form-input" id="daily-variation" value="-2" step="0.1">
+                    <div class="form-row">
+                        <div class="form-group" id="daily-variation-div">
+                            <label>Variação % (ex: -3 para -3%)</label>
+                            <input type="number" class="form-input" id="daily-variation" value="-2" step="0.1">
+                        </div>
+                        <div class="form-group">
+                            <label>Data Início</label>
+                            <input type="date" class="form-input" id="daily-start-date">
+                        </div>
+                        <div class="form-group">
+                            <label>Data Fim</label>
+                            <input type="date" class="form-input" id="daily-end-date">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Data Início</label>
-                        <input type="date" class="form-input" id="daily-start-date">
-                    </div>
-                    <div class="form-group">
-                        <label>Data Fim</label>
-                        <input type="date" class="form-input" id="daily-end-date">
-                    </div>
-                </div>
 
-                <div class="form-row">
-                    <div class="form-group form-action">
-                        <button class="btn btn-primary w-100" id="daily-run-btn" onclick="runDailyBacktest()">
-                            <i class="fas fa-play"></i> Executar Back-teste
-                        </button>
-                    </div>
+                    <button class="btn-execute" id="daily-run-btn" onclick="runDailyBacktest()">
+                        <i class="fas fa-play"></i> Executar Back-teste
+                    </button>
                 </div>
             </div>
-
-            <!-- Resultados Daily -->
             <div id="daily-results"></div>
         </div>
 
         <!-- ==================== B3 INTRADAY ==================== -->
         <div class="page-content d-none" id="page-intraday">
-            <h3 class="mb-3"><i class="fas fa-clock text-info"></i> Back-teste B3 — Intraday</h3>
-            <div class="backtest-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Mercado / Ativos</label>
-                        <select class="form-input" id="intra-market">
-                            <option value="b3">B3 — Todos</option>
-                            <option value="custom">Ativos específicos</option>
-                        </select>
-                    </div>
-                    <div class="form-group" id="intra-tickers-wrap" style="display:none">
-                        <label>Tickers</label>
-                        <input class="form-input" id="intra-tickers" placeholder="PETR4,VALE3">
-                    </div>
+            <div class="page-title">
+                <h2><i class="fas fa-clock"></i> Back-teste B3 — Intraday</h2>
+                <p>Timeframe intraday para ações da B3</p>
+            </div>
+            <div class="glass-card">
+                <div class="card-header-custom">
+                    <i class="fas fa-sliders-h"></i> Configuração do Back-teste
                 </div>
+                <div class="card-body-custom">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Mercado / Ativos</label>
+                            <select class="form-input" id="intra-market">
+                                <option value="b3">B3 — Todos</option>
+                                <option value="custom">Ativos específicos</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="intra-tickers-wrap" style="display:none">
+                            <label>Tickers</label>
+                            <input class="form-input" id="intra-tickers" placeholder="PETR4,VALE3">
+                        </div>
+                    </div>
 
-                <!-- Direção -->
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Direção</label><br>
-                        <button type="button" class="btn btn-success me-2" id="intra-btn-compra">
-                            <i class="fas fa-arrow-up"></i> COMPRA
-                        </button>
-                        <button type="button" class="btn btn-outline-danger" id="intra-btn-venda">
-                            <i class="fas fa-arrow-down"></i> VENDA
-                        </button>
-                        <input type="hidden" id="intra-direction" value="compra">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Direção</label>
+                            <div class="direction-buttons">
+                                <button type="button" class="btn-dir btn-dir-buy active-dir" id="intra-btn-compra">
+                                    <i class="fas fa-arrow-up"></i> COMPRA
+                                </button>
+                                <button type="button" class="btn-dir btn-dir-sell" id="intra-btn-venda">
+                                    <i class="fas fa-arrow-down"></i> VENDA
+                                </button>
+                            </div>
+                            <input type="hidden" id="intra-direction" value="compra">
+                        </div>
                     </div>
-                </div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Operação de Entrada</label>
-                        <select class="form-input" id="intra-entry-strategy"></select>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Operação de Entrada</label>
+                            <select class="form-input" id="intra-entry-strategy"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Operação de Saída</label>
+                            <select class="form-input" id="intra-exit-strategy"></select>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Operação de Saída</label>
-                        <select class="form-input" id="intra-exit-strategy"></select>
-                    </div>
-                </div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Variação %</label>
-                        <input type="number" class="form-input" id="intra-variation" value="-2" step="0.1">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Variação %</label>
+                            <input type="number" class="form-input" id="intra-variation" value="-2" step="0.1">
+                        </div>
+                        <div class="form-group">
+                            <label>Horário Início</label>
+                            <select class="form-input" id="intra-hour-start">
+                                <option value="09:00">09:00</option><option value="09:30">09:30</option>
+                                <option value="10:00">10:00</option><option value="10:30">10:30</option>
+                                <option value="11:00">11:00</option><option value="11:30">11:30</option>
+                                <option value="12:00">12:00</option><option value="13:00">13:00</option>
+                                <option value="14:00">14:00</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Horário Fim</label>
+                            <select class="form-input" id="intra-hour-end">
+                                <option value="15:00">15:00</option><option value="15:30">15:30</option>
+                                <option value="16:00">16:00</option><option value="16:30">16:30</option>
+                                <option value="17:00" selected>17:00</option><option value="17:30">17:30</option>
+                                <option value="18:00">18:00</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Horário Início</label>
-                        <select class="form-input" id="intra-hour-start">
-                            <option value="09:00">09:00</option>
-                            <option value="09:30">09:30</option>
-                            <option value="10:00">10:00</option>
-                            <option value="10:30">10:30</option>
-                            <option value="11:00">11:00</option>
-                            <option value="11:30">11:30</option>
-                            <option value="12:00">12:00</option>
-                            <option value="13:00">13:00</option>
-                            <option value="14:00">14:00</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Horário Fim</label>
-                        <select class="form-input" id="intra-hour-end">
-                            <option value="16:00">16:00</option>
-                            <option value="16:30">16:30</option>
-                            <option value="17:00" selected>17:00</option>
-                            <option value="17:30">17:30</option>
-                            <option value="18:00">18:00</option>
-                        </select>
-                    </div>
-                </div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Data Início</label>
-                        <input type="date" class="form-input" id="intra-start-date">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Data Início</label>
+                            <input type="date" class="form-input" id="intra-start-date">
+                        </div>
+                        <div class="form-group">
+                            <label>Data Fim</label>
+                            <input type="date" class="form-input" id="intra-end-date">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Data Fim</label>
-                        <input type="date" class="form-input" id="intra-end-date">
-                    </div>
-                </div>
 
-                <div class="form-row">
-                    <div class="form-group form-action">
-                        <button class="btn btn-primary w-100" id="intra-run-btn" onclick="runIntradayBacktest()">
-                            <i class="fas fa-play"></i> Executar Back-teste Intraday B3
-                        </button>
-                    </div>
+                    <button class="btn-execute" id="intra-run-btn" onclick="runIntradayBacktest()">
+                        <i class="fas fa-play"></i> Executar Back-teste Intraday B3
+                    </button>
                 </div>
             </div>
-
-            <!-- Resultados Intraday -->
             <div id="intra-results"></div>
         </div>
 
         <!-- ==================== BMF INTRADAY ==================== -->
         <div class="page-content d-none" id="page-bmf-intraday">
-            <h3 class="mb-3"><i class="fas fa-exchange-alt text-info"></i> Back-teste BMF — Intraday</h3>
-            <div class="backtest-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Mercado</label>
-                        <select class="form-input" id="bmf-market">
-                            <option value="bmf">BMF — Todos</option>
-                            <option value="custom">Ativos específicos</option>
-                        </select>
-                    </div>
-                    <div class="form-group" id="bmf-tickers-wrap" style="display:none">
-                        <label>Tickers</label>
-                        <input class="form-input" id="bmf-tickers" placeholder="IBOV_FUT,DOL_FUT">
-                    </div>
+            <div class="page-title">
+                <h2><i class="fas fa-exchange-alt"></i> Back-teste BMF — Intraday</h2>
+                <p>Derivativos e futuros BMF</p>
+            </div>
+            <div class="glass-card">
+                <div class="card-header-custom">
+                    <i class="fas fa-sliders-h"></i> Configuração do Back-teste
                 </div>
+                <div class="card-body-custom">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Mercado</label>
+                            <select class="form-input" id="bmf-market">
+                                <option value="bmf">BMF — Todos</option>
+                                <option value="custom">Ativos específicos</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="bmf-tickers-wrap" style="display:none">
+                            <label>Tickers</label>
+                            <input class="form-input" id="bmf-tickers" placeholder="IBOV_FUT,DOL_FUT">
+                        </div>
+                    </div>
 
-                <!-- Direção -->
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Direção</label><br>
-                        <button type="button" class="btn btn-success me-2" id="bmf-btn-compra">
-                            <i class="fas fa-arrow-up"></i> COMPRA
-                        </button>
-                        <button type="button" class="btn btn-outline-danger" id="bmf-btn-venda">
-                            <i class="fas fa-arrow-down"></i> VENDA
-                        </button>
-                        <input type="hidden" id="bmf-direction" value="compra">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Direção</label>
+                            <div class="direction-buttons">
+                                <button type="button" class="btn-dir btn-dir-buy active-dir" id="bmf-btn-compra">
+                                    <i class="fas fa-arrow-up"></i> COMPRA
+                                </button>
+                                <button type="button" class="btn-dir btn-dir-sell" id="bmf-btn-venda">
+                                    <i class="fas fa-arrow-down"></i> VENDA
+                                </button>
+                            </div>
+                            <input type="hidden" id="bmf-direction" value="compra">
+                        </div>
                     </div>
-                </div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Operação de Entrada</label>
-                        <select class="form-input" id="bmf-entry-strategy"></select>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Operação de Entrada</label>
+                            <select class="form-input" id="bmf-entry-strategy"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Operação de Saída</label>
+                            <select class="form-input" id="bmf-exit-strategy"></select>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Operação de Saída</label>
-                        <select class="form-input" id="bmf-exit-strategy"></select>
-                    </div>
-                </div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Variação %</label>
-                        <input type="number" class="form-input" id="bmf-variation" value="-2" step="0.1">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Variação %</label>
+                            <input type="number" class="form-input" id="bmf-variation" value="-2" step="0.1">
+                        </div>
+                        <div class="form-group">
+                            <label>Horário Início</label>
+                            <select class="form-input" id="bmf-hour-start">
+                                <option value="09:00">09:00</option><option value="09:30">09:30</option>
+                                <option value="10:00">10:00</option><option value="10:30">10:30</option>
+                                <option value="11:00">11:00</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Horário Fim</label>
+                            <select class="form-input" id="bmf-hour-end">
+                                <option value="16:00">16:00</option><option value="16:30">16:30</option>
+                                <option value="17:00" selected>17:00</option><option value="17:30">17:30</option>
+                                <option value="18:00">18:00</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Horário Início</label>
-                        <select class="form-input" id="bmf-hour-start">
-                            <option value="09:00">09:00</option>
-                            <option value="09:30">09:30</option>
-                            <option value="10:00">10:00</option>
-                            <option value="10:30">10:30</option>
-                            <option value="11:00">11:00</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Horário Fim</label>
-                        <select class="form-input" id="bmf-hour-end">
-                            <option value="16:00">16:00</option>
-                            <option value="16:30">16:30</option>
-                            <option value="17:00" selected>17:00</option>
-                            <option value="17:30">17:30</option>
-                            <option value="18:00">18:00</option>
-                        </select>
-                    </div>
-                </div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Data Início</label>
-                        <input type="date" class="form-input" id="bmf-start-date">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Data Início</label>
+                            <input type="date" class="form-input" id="bmf-start-date">
+                        </div>
+                        <div class="form-group">
+                            <label>Data Fim</label>
+                            <input type="date" class="form-input" id="bmf-end-date">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Data Fim</label>
-                        <input type="date" class="form-input" id="bmf-end-date">
-                    </div>
-                </div>
 
-                <div class="form-row">
-                    <div class="form-group form-action">
-                        <button class="btn btn-primary w-100" id="bmf-run-btn" onclick="runBmfIntradayBacktest()">
-                            <i class="fas fa-play"></i> Executar Back-teste BMF Intraday
-                        </button>
-                    </div>
+                    <button class="btn-execute" id="bmf-run-btn" onclick="runBmfIntradayBacktest()">
+                        <i class="fas fa-play"></i> Executar Back-teste BMF Intraday
+                    </button>
                 </div>
             </div>
-
-            <!-- Resultados BMF -->
             <div id="bmf-results"></div>
-        </div>
-
-        <!-- ==================== INDICADORES ==================== -->
-        <div class="page-content d-none" id="page-indicators">
-            <h3 class="mb-3"><i class="fas fa-wave-square text-info"></i> Back-teste — Indicadores Técnicos</h3>
-            <div class="backtest-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Ativo</label>
-                        <input class="form-input" id="indicator-ticker" value="PETR4" placeholder="PETR4">
-                    </div>
-                    <div class="form-group">
-                        <label>Estratégia</label>
-                        <select class="form-input" id="indicator-strategy"></select>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Período</label>
-                        <select class="form-input" id="indicator-period">
-                            <option value="3mo">3 meses</option>
-                            <option value="6mo">6 meses</option>
-                            <option value="1y" selected>1 ano</option>
-                            <option value="2y">2 anos</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Capital Inicial (R$)</label>
-                        <input type="number" class="form-input" id="indicator-capital" value="10000" min="100">
-                    </div>
-                    <div class="form-group form-action">
-                        <button class="btn btn-primary w-100" id="indicator-run-btn" onclick="runIndicatorBacktest()">
-                            <i class="fas fa-play"></i> Executar
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Resultados Indicadores -->
-            <div id="indicator-results"></div>
         </div>
 
         <!-- ==================== ESTRATÉGIAS ==================== -->
         <div class="page-content d-none" id="page-strategies">
-            <h3 class="mb-3"><i class="fas fa-list-check text-info"></i> Estratégias Disponíveis</h3>
+            <div class="page-title">
+                <h2><i class="fas fa-list-check"></i> Estratégias Disponíveis</h2>
+                <p>Todas as estratégias de entrada, saída e indicadores</p>
+            </div>
             <div id="strategies-container">
-                <p class="text-muted">Carregando estratégias...</p>
+                <div class="loading-state"><div class="spinner"></div><p>Carregando estratégias...</p></div>
             </div>
         </div>
 
         <!-- ==================== SALVOS ==================== -->
         <div class="page-content d-none" id="page-saved">
-            <h3 class="mb-3"><i class="fas fa-bookmark text-info"></i> Backtests Salvos</h3>
+            <div class="page-title">
+                <h2><i class="fas fa-bookmark"></i> Backtests Salvos</h2>
+                <p>Seus backtests salvos para consulta</p>
+            </div>
             <div id="saved-container">
-                <p class="text-muted">Carregando...</p>
+                <div class="loading-state"><div class="spinner"></div><p>Carregando...</p></div>
             </div>
         </div>
 
         <!-- ==================== CONFIGURAÇÕES ==================== -->
         <div class="page-content d-none" id="page-config">
-            <h3 class="mb-3"><i class="fas fa-cog text-info"></i> Configurações</h3>
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <div class="backtest-form">
-                        <h5 class="text-info">Estatísticas de Armazenamento</h5>
-                        <div id="config-stats"><p class="text-muted">Carregando...</p></div>
+            <div class="page-title">
+                <h2><i class="fas fa-cog"></i> Configurações</h2>
+                <p>Gerenciamento de dados, token e armazenamento</p>
+            </div>
+
+            <!-- Token BRAPI -->
+            <div class="glass-card mb-4">
+                <div class="card-header-custom">
+                    <i class="fas fa-key"></i> Token BRAPI
+                </div>
+                <div class="card-body-custom">
+                    <p class="config-description">Seu token de acesso à API brapi.dev. Se atingir o limite, crie outro em <a href="https://brapi.dev" target="_blank">brapi.dev</a> e cole aqui.</p>
+                    <div class="form-row">
+                        <div class="form-group" style="flex:3">
+                            <label>Token BRAPI</label>
+                            <input type="text" class="form-input" id="config-brapi-token" placeholder="Cole seu token aqui...">
+                        </div>
+                        <div class="form-group form-action" style="flex:1">
+                            <button class="btn-execute btn-sm" onclick="saveBrapiToken()">
+                                <i class="fas fa-save"></i> Salvar Token
+                            </button>
+                        </div>
+                    </div>
+                    <div id="config-token-status" class="config-status"></div>
+                </div>
+            </div>
+
+            <!-- Download de Dados -->
+            <div class="glass-card mb-4">
+                <div class="card-header-custom">
+                    <i class="fas fa-download"></i> Download de Dados
+                </div>
+                <div class="card-body-custom">
+                    <p class="config-description">Baixe dados históricos dos ativos e armazene no Supabase. Selecione o tipo, período e timeframe.</p>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Tipo de Ativo</label>
+                            <select class="form-input" id="config-asset-type">
+                                <option value="stock">Ações</option>
+                                <option value="fund">FIIs</option>
+                                <option value="bdr">BDRs</option>
+                                <option value="etf">ETFs</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Timeframe</label>
+                            <select class="form-input" id="config-timeframe">
+                                <option value="daily" selected>Diário</option>
+                                <option value="intraday">Intraday (15min)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Data Início</label>
+                            <input type="date" class="form-input" id="config-start-date">
+                        </div>
+                        <div class="form-group">
+                            <label>Data Fim</label>
+                            <input type="date" class="form-input" id="config-end-date">
+                        </div>
+                    </div>
+
+                    <div class="form-row" style="gap:0.5rem">
+                        <button class="btn-execute" id="config-download-btn" onclick="downloadAllAssets()">
+                            <i class="fas fa-download"></i> Baixar Dados
+                        </button>
+                        <button class="btn-execute btn-update" id="config-update-btn" onclick="updateAllAssets()">
+                            <i class="fas fa-sync-alt"></i> Atualizar Dados
+                        </button>
+                    </div>
+
+                    <!-- Progress -->
+                    <div id="config-download-progress" class="download-progress" style="display:none">
+                        <div class="progress-header">
+                            <span id="config-progress-label">Baixando...</span>
+                            <span id="config-progress-count">0/0</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill" id="config-progress-bar" style="width:0%"></div>
+                        </div>
+                        <div id="config-progress-log" class="progress-log"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Estatísticas -->
+            <div class="glass-card">
+                <div class="card-header-custom">
+                    <i class="fas fa-database"></i> Armazenamento Supabase
+                </div>
+                <div class="card-body-custom">
+                    <div id="config-stats">
+                        <div class="loading-state"><div class="spinner"></div><p>Carregando estatísticas...</p></div>
                     </div>
                 </div>
             </div>
@@ -426,7 +482,6 @@
 <script src="js/charts.js"></script>
 <script src="js/app.js"></script>
 
-<!-- Toggle sidebar mobile + show/hide tickers -->
 <script>
     // Mobile sidebar toggle
     document.getElementById('menuToggle')?.addEventListener('click', () => {
@@ -436,7 +491,7 @@
         document.getElementById('sidebar')?.classList.remove('open');
     });
 
-    // Show/hide custom tickers field based on market select
+    // Show/hide custom tickers field
     ['daily', 'intra', 'bmf'].forEach(prefix => {
         const marketSel = document.getElementById(`${prefix}-market`);
         const tickersWrap = document.getElementById(`${prefix}-tickers-wrap`);
