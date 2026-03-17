@@ -1,956 +1,636 @@
-"""
-Trade Halley API v3.0.0
-FastAPI backend — Trade Certo completo
-Suporta: Indicadores técnicos, Backtest Daily, Backtest Intraday
-Fonte de dados: brapi.dev + Supabase
-"""
-
-from fastapi import FastAPI, HTTPException, Query, Path
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional, List
-import logging
-import uuid
-from datetime import datetime
-
-# ─── Logging ───
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("trade_halley")
-
-# ─── FastAPI App ───
-app = FastAPI(
-    title="Trade Halley API",
-    description="API Trade Certo — Back-tests B3 Daily, B3 Intraday, BMF Intraday (brapi.dev)",
-    version="3.0.0",
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-# ─── Pydantic Models ───
-class PinBody(BaseModel):
-    pin: str
-
-
-class PinChangeBody(BaseModel):
-    old_pin: str
-    new_pin: str
-
-
-class DownloadBody(BaseModel):
-    pin: str
-    ticker: str
-    start_date: str = ""
-    end_date: str = ""
-    timeframe: str = "daily"
-
-
-class UpdateAllBody(BaseModel):
-    pin: str
-
-
-class SaveBacktestBody(BaseModel):
-    result: dict
-
-
-class BacktestDailyBody(BaseModel):
-    ticker: Optional[str] = None
-    tickers: Optional[List[str]] = None
-    market: Optional[str] = None
-    entry_strategy: str
-    exit_strategy: str
-    direction: str = "compra"
-    variation_pct: float = 0.0
-    period: str = "1y"
-    initial_capital: float = 10000.0
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-
-
-class BacktestIntradayBody(BaseModel):
-    ticker: Optional[str] = None
-    tickers: Optional[List[str]] = None
-    market: Optional[str] = None
-    entry_strategy: str
-    exit_strategy: str
-    direction: str = "compra"
-    variation_pct: float = 0.0
-    hour_start: str = "09:00"
-    hour_end: str = "17:00"
-    hour_target: Optional[str] = None
-    target_pct: Optional[float] = None
-    stop_loss_pct: Optional[float] = None
-    close_eod: bool = True
-    max_trades_per_day: int = 99
-    bb_window: int = 20
-    bb_std: float = 2.0
-    ma_period: int = 20
-    period: str = "3mo"
-    initial_capital: float = 10000.0
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-
-
-# ─── Startup ───
-@app.on_event("startup")
-async def startup_event():
-    logger.info("Trade Halley API v3.0 starting...")
-    try:
-        from scheduler import start_scheduler
-        start_scheduler()
-        logger.info("Scheduler started")
-    except Exception as e:
-        logger.warning(f"Scheduler not started: {e}")
-
-
-# ═══════════════════════════════════════════
-# ROOT & HEALTH
-# ═══════════════════════════════════════════
-
-@app.get("/")
-async def root():
-    return {
-        "name": "Trade Halley API",
-        "version": "3.0.0",
-        "status": "online",
-        "data_source": "brapi.dev",
-        "endpoints": [
-            "/health",
-            "/assets",
-            "/asset/{ticker}",
-            "/market-data/{ticker}",
-            "/strategies",
-            "/strategies/all",
-            "/strategies/daily/entry",
-            "/strategies/daily/exit",
-            "/strategies/intraday/entry",
-            "/strategies/intraday/exit",
-            "/backtest",
-            "/backtest/bulk",
-            "/backtest/compare",
-            "/backtest/daily",
-            "/backtest/daily/bulk",
-            "/backtest/intraday",
-            "/backtest/intraday/bulk",
-            "/backtests/save",
-            "/backtests/saved",
-            "/backtests/saved/{id}",
-            "/dashboard/summary",
-            "/config/verify-pin",
-            "/config/change-pin",
-            "/config/validate-ticker/{ticker}",
-            "/config/download-data",
-            "/config/update-all",
-            "/config/asset/{ticker}",
-            "/config/assets",
-            "/storage/stats",
-        ],
-    }
-
-
-@app.get("/health")
-async def health():
-    return {"status": "healthy", "version": "3.0.0", "timestamp": datetime.utcnow().isoformat()}
-
-
-# ═══════════════════════════════════════════
-# CONFIG — PIN
-# ═══════════════════════════════════════════
-
-@app.post("/config/verify-pin")
-async def verify_pin_endpoint(body: PinBody):
-    try:
-        from storage_manager import verify_pin
-        valid = verify_pin(body.pin)
-        return {"valid": valid}
-    except Exception as e:
-        logger.error(f"verify_pin error: {e}")
-        raise HTTPException(500, str(e))
-
-
-@app.post("/config/change-pin")
-async def change_pin_endpoint(body: PinChangeBody):
-    try:
-        from storage_manager import verify_pin, change_pin
-        if not verify_pin(body.old_pin):
-            raise HTTPException(403, "PIN atual incorreto")
-        change_pin(body.old_pin, body.new_pin)
-        return {"success": True, "message": "PIN alterado com sucesso"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"change_pin error: {e}")
-        raise HTTPException(500, str(e))
-
-
-# ═══════════════════════════════════════════
-# STORAGE STATS
-# ═══════════════════════════════════════════
-
-@app.get("/storage/stats")
-async def storage_stats():
-    try:
-        from storage_manager import get_storage_stats
-        stats = get_storage_stats()
-        return stats
-    except Exception as e:
-        logger.error(f"storage_stats error: {e}")
-        return {
-            "total_assets": 0,
-            "daily_assets": 0,
-            "intraday_assets": 0,
-            "total_records": 0,
-            "total_backtests": 0,
-            "storage_type": "supabase",
-            "last_auto_update": None,
+<!DOCTYPE html>
+<html lang="pt-BR" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trade Halley — Trade Certo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-card: #1c2333;
+            --border-color: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent-blue: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-red: #f85149;
+            --accent-yellow: #d29922;
+            --accent-purple: #bc8cff;
         }
-
-# ═══════════════════════════════════════════
-# CONFIG — TICKER VALIDATION
-# ═══════════════════════════════════════════
-
-@app.get("/config/validate-ticker/{ticker}")
-async def validate_ticker_endpoint(ticker: str = Path(...)):
-    try:
-        from data_fetcher import validate_ticker
-        result = validate_ticker(ticker)
-        return result
-    except Exception as e:
-        logger.error(f"validate_ticker error: {e}")
-        return {"valid": False, "ticker": ticker, "name": None, "last_price": None}
-
-
-# ═══════════════════════════════════════════
-# CONFIG — DOWNLOAD DATA
-# ═══════════════════════════════════════════
-
-@app.post("/config/download-data")
-async def download_data_endpoint(body: DownloadBody):
-    try:
-        from storage_manager import verify_pin
-        if not verify_pin(body.pin):
-            raise HTTPException(403, "PIN incorreto")
-
-        from data_fetcher import download_asset_data
-        result = download_asset_data(
-            ticker=body.ticker,
-            start_date=body.start_date,
-            end_date=body.end_date,
-            timeframe=body.timeframe,
-        )
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"download_data error: {e}")
-        raise HTTPException(500, str(e))
-
-
-# ═══════════════════════════════════════════
-# CONFIG — UPDATE ALL
-# ═══════════════════════════════════════════
-
-@app.post("/config/update-all")
-async def update_all_endpoint(body: UpdateAllBody):
-    try:
-        from storage_manager import verify_pin
-        if not verify_pin(body.pin):
-            raise HTTPException(403, "PIN incorreto")
-
-        from data_fetcher import download_asset_data, B3_TICKERS
-        results = []
-        for ticker in list(B3_TICKERS.keys())[:10]:
-            try:
-                r = download_asset_data(ticker)
-                results.append(r)
-            except Exception as e:
-                results.append({"success": False, "ticker": ticker, "message": str(e)})
-
-        success_count = sum(1 for r in results if r.get("success"))
-        return {
-            "success": True,
-            "message": f"Atualização concluída: {success_count}/{len(results)} ativos",
-            "results": results,
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            margin: 0; padding: 0;
+            display: flex; min-height: 100vh;
         }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"update_all error: {e}")
-        raise HTTPException(500, str(e))
-
-
-# ═══════════════════════════════════════════
-# CONFIG — DELETE ASSET
-# ═══════════════════════════════════════════
-
-@app.delete("/config/asset/{ticker}")
-async def delete_asset_endpoint(
-    ticker: str = Path(...),
-    pin: str = Query(...),
-):
-    try:
-        from storage_manager import verify_pin, delete_asset
-        if not verify_pin(pin):
-            raise HTTPException(403, "PIN incorreto")
-        delete_asset(ticker)
-        return {"success": True, "message": f"Ativo {ticker} removido"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"delete_asset error: {e}")
-        raise HTTPException(500, str(e))
-
-
-# ═══════════════════════════════════════════
-# CONFIG — LIST SAVED ASSETS
-# ═══════════════════════════════════════════
-
-@app.get("/config/assets")
-async def list_saved_assets():
-    try:
-        from storage_manager import list_assets
-        assets = list_assets()
-        return {"assets": assets}
-    except Exception as e:
-        logger.error(f"list_saved_assets error: {e}")
-        return {"assets": []}
-
-
-# ═══════════════════════════════════════════
-# ASSETS
-# ═══════════════════════════════════════════
-
-@app.get("/assets")
-async def get_assets(
-    market: str = Query("all", enum=["all", "b3", "bmf"]),
-):
-    from data_fetcher import B3_TICKERS, BMF_TICKERS
-
-    b3_list = [{"ticker": k, "yahoo_ticker": f"{k}.SA"} for k in B3_TICKERS]
-    bmf_list = [
-        {"ticker": "IBOV_FUT", "yahoo_ticker": "^BVSP"},
-        {"ticker": "DOL_FUT", "yahoo_ticker": "USDBRL=X"},
-        {"ticker": "SP500", "yahoo_ticker": "ES=F"},
-        {"ticker": "NASDAQ", "yahoo_ticker": "NQ=F"},
-        {"ticker": "DOW", "yahoo_ticker": "YM=F"},
-        {"ticker": "CRUDE_OIL", "yahoo_ticker": "CL=F"},
-        {"ticker": "GOLD", "yahoo_ticker": "GC=F"},
-        {"ticker": "SILVER", "yahoo_ticker": "SI=F"},
-        {"ticker": "EURO_FX", "yahoo_ticker": "EURUSD=X"},
-        {"ticker": "BITCOIN", "yahoo_ticker": "BTC-USD"},
-    ]
-
-    if market == "b3":
-        return {"b3": b3_list}
-    elif market == "bmf":
-        return {"bmf": bmf_list}
-    return {"b3": b3_list, "bmf": bmf_list}
-
-
-# ═══════════════════════════════════════════
-# ASSET INFO
-# ═══════════════════════════════════════════
-
-@app.get("/asset/{ticker}")
-async def get_asset_info_endpoint(ticker: str = Path(...)):
-    try:
-        from data_fetcher import get_stock_info
-        info = get_stock_info(ticker)
-        return info
-    except Exception as e:
-        logger.error(f"get_asset_info error: {e}")
-        raise HTTPException(500, str(e))
-
-
-# ═══════════════════════════════════════════
-# MARKET DATA
-# ═══════════════════════════════════════════
-
-@app.get("/market-data/{ticker}")
-async def get_market_data(
-    ticker: str = Path(...),
-    period: str = Query("3mo", enum=["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y"]),
-    interval: str = Query("1d", enum=["1m", "5m", "15m", "30m", "1h", "1d", "1wk"]),
-):
-    try:
-        from data_fetcher import get_stock_data
-        data = get_stock_data(ticker, period=period, interval=interval)
-        if not data:
-            raise HTTPException(404, f"Sem dados para {ticker}")
-        return {
-            "ticker": ticker,
-            "period": period,
-            "interval": interval,
-            "records": len(data),
-            "data": data,
+        /* Sidebar */
+        .sidebar {
+            width: 260px; min-height: 100vh;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            padding: 0; flex-shrink: 0;
+            display: flex; flex-direction: column;
+            position: fixed; left: 0; top: 0; bottom: 0;
+            z-index: 100; overflow-y: auto;
         }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"market_data error for {ticker}: {e}")
-        raise HTTPException(500, str(e))
-
-# ═══════════════════════════════════════════
-# STRATEGIES — LISTAGEM
-# ═══════════════════════════════════════════
-
-@app.get("/strategies")
-async def get_strategies():
-    """Lista estratégias de indicadores técnicos (compatibilidade)."""
-    try:
-        from strategies import list_strategies
-        strats = list_strategies()
-        return {"strategies": strats}
-    except Exception as e:
-        logger.error(f"strategies error: {e}")
-        return {"strategies": []}
-
-
-@app.get("/strategies/all")
-async def get_all_strategies():
-    """Lista TODAS as estratégias organizadas por tipo."""
-    try:
-        from strategies import list_all_strategies
-        return list_all_strategies()
-    except Exception as e:
-        logger.error(f"strategies/all error: {e}")
-        return {
-            "indicator_strategies": [],
-            "daily_entry": [],
-            "daily_exit": [],
-            "intraday_entry": [],
-            "intraday_exit": [],
+        .sidebar-header {
+            padding: 20px; text-align: center;
+            border-bottom: 1px solid var(--border-color);
         }
-
-
-@app.get("/strategies/daily/entry")
-async def get_daily_entry_strategies():
-    """Lista estratégias de ENTRADA para timeframe diário."""
-    try:
-        from strategies import list_entry_strategies_daily
-        return {"strategies": list_entry_strategies_daily()}
-    except Exception as e:
-        logger.error(f"daily entry strategies error: {e}")
-        return {"strategies": []}
-
-
-@app.get("/strategies/daily/exit")
-async def get_daily_exit_strategies():
-    """Lista estratégias de SAÍDA para timeframe diário."""
-    try:
-        from strategies import list_exit_strategies_daily
-        return {"strategies": list_exit_strategies_daily()}
-    except Exception as e:
-        logger.error(f"daily exit strategies error: {e}")
-        return {"strategies": []}
-
-
-@app.get("/strategies/intraday/entry")
-async def get_intraday_entry_strategies():
-    """Lista estratégias de ENTRADA para intraday."""
-    try:
-        from strategies import list_entry_strategies_intraday
-        return {"strategies": list_entry_strategies_intraday()}
-    except Exception as e:
-        logger.error(f"intraday entry strategies error: {e}")
-        return {"strategies": []}
-
-
-@app.get("/strategies/intraday/exit")
-async def get_intraday_exit_strategies():
-    """Lista estratégias de SAÍDA para intraday."""
-    try:
-        from strategies import list_exit_strategies_intraday
-        return {"strategies": list_exit_strategies_intraday()}
-    except Exception as e:
-        logger.error(f"intraday exit strategies error: {e}")
-        return {"strategies": []}
-
-
-# ═══════════════════════════════════════════
-# BACKTEST — INDICADORES TÉCNICOS (compatibilidade v2.2)
-# ═══════════════════════════════════════════
-
-@app.get("/backtest")
-async def backtest_endpoint(
-    ticker: str = Query(..., description="Codigo do ativo (ex: PETR4)"),
-    strategy: str = Query(..., description="ID da estrategia"),
-    period: str = Query("1y", enum=["3mo", "6mo", "1y", "2y", "5y"]),
-    interval: str = Query("1d", enum=["1h", "1d"]),
-    capital: float = Query(10000.0, ge=100, le=10_000_000),
-    stop_loss: Optional[float] = Query(None, ge=0.001, le=0.5),
-    take_profit: Optional[float] = Query(None, ge=0.001, le=1.0),
-):
-    try:
-        from backtest_engine import run_backtest
-        result = run_backtest(
-            ticker=ticker,
-            strategy_id=strategy,
-            period=period,
-            interval=interval,
-            initial_capital=capital,
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-        )
-        if not result:
-            raise HTTPException(404, f"Não foi possível executar backtest para {ticker}")
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"backtest error: {e}")
-        raise HTTPException(500, str(e))
-
-
-@app.get("/backtest/bulk")
-async def backtest_bulk(
-    market: str = Query("b3", enum=["b3", "bmf"]),
-    strategy: str = Query(..., description="ID da estrategia"),
-    period: str = Query("1y", enum=["3mo", "6mo", "1y", "2y"]),
-    interval: str = Query("1d", enum=["1h", "1d"]),
-    capital: float = Query(10000.0, ge=100, le=10_000_000),
-):
-    try:
-        from data_fetcher import B3_TICKERS, BMF_TICKERS
-        from backtest_engine import run_bulk_backtest
-
-        tickers = list(B3_TICKERS.keys()) if market == "b3" else list(BMF_TICKERS.keys())
-        results = run_bulk_backtest(
-            tickers=tickers,
-            strategy_id=strategy,
-            period=period,
-            interval=interval,
-            initial_capital=capital,
-        )
-        return {
-            "market": market,
-            "strategy": strategy,
-            "period": period,
-            "interval": interval,
-            "total_tested": len(results),
-            "results": results,
+        .sidebar-header h4 { margin: 0; color: var(--accent-blue); font-weight: 700; }
+        .sidebar-header small { color: var(--text-secondary); font-size: 0.75rem; }
+        .nav-section { padding: 12px 0; }
+        .nav-section-title {
+            padding: 4px 20px; font-size: 0.7rem; text-transform: uppercase;
+            color: var(--text-secondary); letter-spacing: 1px; font-weight: 600;
         }
-    except Exception as e:
-        logger.error(f"bulk backtest error: {e}")
-        raise HTTPException(500, str(e))
-
-
-@app.get("/backtest/compare")
-async def backtest_compare(
-    ticker: str = Query(..., description="Codigo do ativo"),
-    period: str = Query("1y", enum=["3mo", "6mo", "1y", "2y"]),
-    interval: str = Query("1d", enum=["1h", "1d"]),
-    capital: float = Query(10000.0, ge=100, le=10_000_000),
-):
-    try:
-        from backtest_engine import run_backtest
-        from strategies import list_strategies
-
-        strats = list_strategies()
-        results = []
-        for s in strats:
-            try:
-                r = run_backtest(
-                    ticker=ticker, strategy_id=s["id"],
-                    period=period, interval=interval, initial_capital=capital,
-                )
-                if r:
-                    results.append(r)
-            except Exception as e:
-                logger.warning(f"Compare skip {s['id']}: {e}")
-
-        results.sort(
-            key=lambda x: x.get("metrics", {}).get("total_return_pct", 0),
-            reverse=True,
-        )
-        return {
-            "ticker": ticker,
-            "period": period,
-            "interval": interval,
-            "total_strategies": len(results),
-            "results": results,
+        .nav-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 20px; cursor: pointer;
+            color: var(--text-secondary); transition: all 0.2s;
+            text-decoration: none; border: none; background: none; width: 100%;
+            font-size: 0.9rem;
         }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"compare error: {e}")
-        raise HTTPException(500, str(e))
-
-
-# ═══════════════════════════════════════════
-# BACKTEST — TRADE CERTO DAILY
-# ═══════════════════════════════════════════
-
-def _resolve_tickers(body_ticker, body_tickers, body_market):
-    """Helper: resolve lista de tickers a partir de ticker/tickers/market."""
-    from data_fetcher import B3_TICKERS, BMF_TICKERS
-
-    if body_tickers and len(body_tickers) > 0:
-        return body_tickers
-
-    if body_ticker:
-        return [body_ticker]
-
-    if body_market:
-        m = body_market.lower()
-        if m == "b3":
-            return list(B3_TICKERS.keys())
-        elif m == "bmf":
-            return list(BMF_TICKERS.keys())
-        elif m == "all":
-            return list(B3_TICKERS.keys()) + list(BMF_TICKERS.keys())
-
-    return []
-
-
-@app.post("/backtest/daily")
-async def backtest_daily_endpoint(body: BacktestDailyBody):
-    """
-    Backtest Trade Certo — Timeframe Diário.
-    Aceita um ticker, lista de tickers, ou mercado inteiro.
-    """
-    try:
-        tickers = _resolve_tickers(body.ticker, body.tickers, body.market)
-        if not tickers:
-            raise HTTPException(400, "Informe ticker, tickers ou market")
-
-        if len(tickers) == 1:
-            # Single backtest
-            from backtest_engine import run_backtest_daily
-            result = run_backtest_daily(
-                ticker=tickers[0],
-                entry_strategy_id=body.entry_strategy,
-                exit_strategy_id=body.exit_strategy,
-                direction=body.direction,
-                variation_pct=body.variation_pct,
-                period=body.period,
-                initial_capital=body.initial_capital,
-                start_date=body.start_date,
-                end_date=body.end_date,
-            )
-            if not result:
-                raise HTTPException(404, f"Sem dados para {tickers[0]}")
-            return result
-        else:
-            # Bulk backtest
-            from backtest_engine import run_bulk_backtest_daily
-            results = run_bulk_backtest_daily(
-                tickers=tickers,
-                entry_strategy_id=body.entry_strategy,
-                exit_strategy_id=body.exit_strategy,
-                direction=body.direction,
-                variation_pct=body.variation_pct,
-                period=body.period,
-                initial_capital=body.initial_capital,
-                start_date=body.start_date,
-                end_date=body.end_date,
-            )
-            return {
-                "entry_strategy": body.entry_strategy,
-                "exit_strategy": body.exit_strategy,
-                "direction": body.direction,
-                "variation_pct": body.variation_pct,
-                "period": body.period,
-                "total_tested": len(results),
-                "results": results,
-            }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"backtest daily error: {e}")
-        raise HTTPException(500, str(e))
-
-
-@app.post("/backtest/daily/bulk")
-async def backtest_daily_bulk_endpoint(body: BacktestDailyBody):
-    """Backtest Trade Certo Daily — múltiplos ativos (alias)."""
-    try:
-        tickers = _resolve_tickers(body.ticker, body.tickers, body.market)
-        if not tickers:
-            raise HTTPException(400, "Informe ticker, tickers ou market")
-
-        from backtest_engine import run_bulk_backtest_daily
-        results = run_bulk_backtest_daily(
-            tickers=tickers,
-            entry_strategy_id=body.entry_strategy,
-            exit_strategy_id=body.exit_strategy,
-            direction=body.direction,
-            variation_pct=body.variation_pct,
-            period=body.period,
-            initial_capital=body.initial_capital,
-            start_date=body.start_date,
-            end_date=body.end_date,
-        )
-        return {
-            "entry_strategy": body.entry_strategy,
-            "exit_strategy": body.exit_strategy,
-            "direction": body.direction,
-            "variation_pct": body.variation_pct,
-            "period": body.period,
-            "total_tested": len(results),
-            "results": results,
+        .nav-item:hover { color: var(--text-primary); background: rgba(88,166,255,0.08); }
+        .nav-item.active {
+            color: var(--accent-blue); background: rgba(88,166,255,0.12);
+            border-right: 3px solid var(--accent-blue);
         }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"backtest daily bulk error: {e}")
-        raise HTTPException(500, str(e))
-
-# ═══════════════════════════════════════════
-# BACKTEST — TRADE CERTO INTRADAY
-# ═══════════════════════════════════════════
-
-@app.post("/backtest/intraday")
-async def backtest_intraday_endpoint(body: BacktestIntradayBody):
-    """
-    Backtest Trade Certo — Intraday.
-    Aceita ticker único, lista, ou mercado.
-    """
-    try:
-        tickers = _resolve_tickers(body.ticker, body.tickers, body.market)
-        if not tickers:
-            raise HTTPException(400, "Informe ticker, tickers ou market")
-
-        if len(tickers) == 1:
-            from backtest_engine import run_backtest_intraday
-            result = run_backtest_intraday(
-                ticker=tickers[0],
-                entry_strategy_id=body.entry_strategy,
-                exit_strategy_id=body.exit_strategy,
-                direction=body.direction,
-                variation_pct=body.variation_pct,
-                hour_start=body.hour_start,
-                hour_end=body.hour_end,
-                hour_target=body.hour_target,
-                target_pct=body.target_pct,
-                stop_loss_pct=body.stop_loss_pct,
-                close_eod=body.close_eod,
-                max_trades_per_day=body.max_trades_per_day,
-                bb_window=body.bb_window,
-                bb_std=body.bb_std,
-                ma_period=body.ma_period,
-                period=body.period,
-                initial_capital=body.initial_capital,
-                start_date=body.start_date,
-                end_date=body.end_date,
-            )
-            if not result:
-                raise HTTPException(404, f"Sem dados intraday para {tickers[0]}")
-            return result
-        else:
-            from backtest_engine import run_bulk_backtest_intraday
-            results = run_bulk_backtest_intraday(
-                tickers=tickers,
-                entry_strategy_id=body.entry_strategy,
-                exit_strategy_id=body.exit_strategy,
-                direction=body.direction,
-                variation_pct=body.variation_pct,
-                hour_start=body.hour_start,
-                hour_end=body.hour_end,
-                hour_target=body.hour_target,
-                target_pct=body.target_pct,
-                stop_loss_pct=body.stop_loss_pct,
-                close_eod=body.close_eod,
-                max_trades_per_day=body.max_trades_per_day,
-                bb_window=body.bb_window,
-                bb_std=body.bb_std,
-                ma_period=body.ma_period,
-                period=body.period,
-                initial_capital=body.initial_capital,
-                start_date=body.start_date,
-                end_date=body.end_date,
-            )
-            return {
-                "entry_strategy": body.entry_strategy,
-                "exit_strategy": body.exit_strategy,
-                "direction": body.direction,
-                "variation_pct": body.variation_pct,
-                "hour_start": body.hour_start,
-                "hour_end": body.hour_end,
-                "period": body.period,
-                "total_tested": len(results),
-                "results": results,
-            }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"backtest intraday error: {e}")
-        raise HTTPException(500, str(e))
-
-
-@app.post("/backtest/intraday/bulk")
-async def backtest_intraday_bulk_endpoint(body: BacktestIntradayBody):
-    """Backtest Trade Certo Intraday — múltiplos ativos (alias)."""
-    try:
-        tickers = _resolve_tickers(body.ticker, body.tickers, body.market)
-        if not tickers:
-            raise HTTPException(400, "Informe ticker, tickers ou market")
-
-        from backtest_engine import run_bulk_backtest_intraday
-        results = run_bulk_backtest_intraday(
-            tickers=tickers,
-            entry_strategy_id=body.entry_strategy,
-            exit_strategy_id=body.exit_strategy,
-            direction=body.direction,
-            variation_pct=body.variation_pct,
-            hour_start=body.hour_start,
-            hour_end=body.hour_end,
-            hour_target=body.hour_target,
-            target_pct=body.target_pct,
-            stop_loss_pct=body.stop_loss_pct,
-            close_eod=body.close_eod,
-            max_trades_per_day=body.max_trades_per_day,
-            bb_window=body.bb_window,
-            bb_std=body.bb_std,
-            ma_period=body.ma_period,
-            period=body.period,
-            initial_capital=body.initial_capital,
-            start_date=body.start_date,
-            end_date=body.end_date,
-        )
-        return {
-            "entry_strategy": body.entry_strategy,
-            "exit_strategy": body.exit_strategy,
-            "direction": body.direction,
-            "variation_pct": body.variation_pct,
-            "hour_start": body.hour_start,
-            "hour_end": body.hour_end,
-            "period": body.period,
-            "total_tested": len(results),
-            "results": results,
+        .nav-item i { width: 20px; text-align: center; }
+        /* Main */
+        .main-content {
+            margin-left: 260px; flex: 1;
+            padding: 24px; min-height: 100vh;
         }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"backtest intraday bulk error: {e}")
-        raise HTTPException(500, str(e))
-
-
-# ═══════════════════════════════════════════
-# SAVED BACKTESTS
-# ═══════════════════════════════════════════
-
-@app.post("/backtests/save")
-async def save_backtest_endpoint(body: SaveBacktestBody):
-    try:
-        from storage_manager import save_backtest
-        bt_id = str(uuid.uuid4())[:8]
-        body.result["id"] = bt_id
-        body.result["saved_at"] = datetime.utcnow().isoformat()
-        save_backtest(bt_id, body.result)
-        return {"success": True, "id": bt_id, "message": "Backtest salvo"}
-    except Exception as e:
-        logger.error(f"save_backtest error: {e}")
-        raise HTTPException(500, str(e))
-
-
-@app.get("/backtests/saved")
-async def list_saved_backtests():
-    try:
-        from storage_manager import list_backtests
-        backtests = list_backtests()
-        return {"backtests": backtests}
-    except Exception as e:
-        logger.error(f"list_backtests error: {e}")
-        return {"backtests": []}
-
-
-@app.get("/backtests/saved/{bt_id}")
-async def get_saved_backtest(bt_id: str = Path(...)):
-    try:
-        from storage_manager import load_backtest
-        bt = load_backtest(bt_id)
-        if not bt:
-            raise HTTPException(404, "Backtest não encontrado")
-        return bt
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"get_backtest error: {e}")
-        raise HTTPException(500, str(e))
-
-
-@app.delete("/backtests/saved/{bt_id}")
-async def delete_saved_backtest(bt_id: str = Path(...)):
-    try:
-        from storage_manager import delete_backtest
-        delete_backtest(bt_id)
-        return {"success": True, "message": "Backtest removido"}
-    except Exception as e:
-        logger.error(f"delete_backtest error: {e}")
-        raise HTTPException(500, str(e))
-
-
-# ═══════════════════════════════════════════
-# DASHBOARD SUMMARY
-# ═══════════════════════════════════════════
-
-@app.get("/dashboard/summary")
-async def dashboard_summary():
-    try:
-        from data_fetcher import (
-            get_stock_info,
-            B3_TICKERS,
-            BMF_TICKERS,
-            DASHBOARD_TICKERS,
-        )
-
-        top_tickers = []
-        for label, brapi_sym in DASHBOARD_TICKERS.items():
-            try:
-                info = get_stock_info(label)
-                if info and info.get("price") is not None:
-                    top_tickers.append(info)
-            except Exception as e:
-                logger.warning(f"Dashboard skip {label}: {e}")
-
-        strategy_count = 13
-        daily_entry_count = 7
-        daily_exit_count = 3
-        intraday_entry_count = 12
-        intraday_exit_count = 7
-
-        try:
-            from strategies import (
-                list_strategies,
-                list_entry_strategies_daily,
-                list_exit_strategies_daily,
-                list_entry_strategies_intraday,
-                list_exit_strategies_intraday,
-            )
-            strategy_count = len(list_strategies())
-            daily_entry_count = len(list_entry_strategies_daily())
-            daily_exit_count = len(list_exit_strategies_daily())
-            intraday_entry_count = len(list_entry_strategies_intraday())
-            intraday_exit_count = len(list_exit_strategies_intraday())
-        except Exception:
-            pass
-
-        return {
-            "top_tickers": top_tickers,
-            "total_b3": len(B3_TICKERS),
-            "total_bmf": len(BMF_TICKERS),
-            "total_strategies": strategy_count,
-            "total_daily_entry": daily_entry_count,
-            "total_daily_exit": daily_exit_count,
-            "total_intraday_entry": intraday_entry_count,
-            "total_intraday_exit": intraday_exit_count,
+        .page { display: none; }
+        .page.active { display: block; }
+        /* Cards */
+        .card-custom {
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: 8px; padding: 20px; margin-bottom: 16px;
         }
-    except Exception as e:
-        logger.error(f"dashboard_summary error: {e}")
-        return {
-            "top_tickers": [],
-            "total_b3": 30,
-            "total_bmf": 10,
-            "total_strategies": 13,
-            "total_daily_entry": 7,
-            "total_daily_exit": 3,
-            "total_intraday_entry": 12,
-            "total_intraday_exit": 7,
+        .card-custom h5 { color: var(--accent-blue); margin-bottom: 12px; }
+        /* Stats */
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .stat-card {
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: 8px; padding: 16px; text-align: center;
         }
+        .stat-card .value { font-size: 1.6rem; font-weight: 700; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; }
+        .text-green { color: var(--accent-green); }
+        .text-red { color: var(--accent-red); }
+        .text-blue { color: var(--accent-blue); }
+        .text-yellow { color: var(--accent-yellow); }
+        .text-purple { color: var(--accent-purple); }
+        /* Table */
+        .table-dark { --bs-table-bg: var(--bg-card); --bs-table-border-color: var(--border-color); }
+        .table-dark th { color: var(--accent-blue); font-size: 0.8rem; text-transform: uppercase; }
+        .table-dark td { font-size: 0.85rem; vertical-align: middle; }
+        /* Forms */
+        .form-control, .form-select {
+            background: var(--bg-primary); border-color: var(--border-color);
+            color: var(--text-primary);
+        }
+        .form-control:focus, .form-select:focus {
+            background: var(--bg-primary); color: var(--text-primary);
+            border-color: var(--accent-blue); box-shadow: 0 0 0 2px rgba(88,166,255,0.2);
+        }
+        .form-label { color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; }
+        /* Direction buttons */
+        .btn-direction { padding: 8px 24px; border-radius: 6px; font-weight: 600; }
+        .btn-direction.buy { background: var(--accent-green); color: #000; border: none; }
+        .btn-direction.buy.active { box-shadow: 0 0 0 3px rgba(63,185,80,0.5); }
+        .btn-direction.sell { background: var(--accent-red); color: #fff; border: none; }
+        .btn-direction.sell.active { box-shadow: 0 0 0 3px rgba(248,81,73,0.5); }
+        .btn-direction:not(.active) { opacity: 0.4; }
+        /* Loading */
+        .spinner-overlay {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6); z-index: 9999;
+            justify-content: center; align-items: center;
+        }
+        .spinner-overlay.show { display: flex; }
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar { width: 60px; }
+            .sidebar .nav-item span, .sidebar-header h4, .sidebar-header small,
+            .nav-section-title { display: none; }
+            .main-content { margin-left: 60px; padding: 12px; }
+            .stat-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Spinner -->
+<div class="spinner-overlay" id="spinner">
+    <div class="spinner-border text-primary" style="width:3rem;height:3rem;" role="status">
+        <span class="visually-hidden">Carregando...</span>
+    </div>
+</div>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+    <div class="sidebar-header">
+        <h4><i class="fas fa-chart-line"></i> Trade Halley</h4>
+        <small>Trade Certo v3.0</small>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Principal</div>
+        <button class="nav-item active" data-page="dashboard">
+            <i class="fas fa-tachometer-alt"></i> <span>Dashboard</span>
+        </button>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Back-tests</div>
+        <button class="nav-item" data-page="bt-b3-daily">
+            <i class="fas fa-calendar-day"></i> <span>B3 Diário</span>
+        </button>
+        <button class="nav-item" data-page="bt-b3-intraday">
+            <i class="fas fa-clock"></i> <span>B3 Intraday</span>
+        </button>
+        <button class="nav-item" data-page="bt-bmf-intraday">
+            <i class="fas fa-exchange-alt"></i> <span>BMF Intraday</span>
+        </button>
+        <button class="nav-item" data-page="bt-indicators">
+            <i class="fas fa-wave-square"></i> <span>Indicadores</span>
+        </button>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Ferramentas</div>
+        <button class="nav-item" data-page="strategies">
+            <i class="fas fa-list-check"></i> <span>Estratégias</span>
+        </button>
+        <button class="nav-item" data-page="saved">
+            <i class="fas fa-bookmark"></i> <span>Salvos</span>
+        </button>
+        <button class="nav-item" data-page="config">
+            <i class="fas fa-cog"></i> <span>Configurações</span>
+        </button>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<div class="main-content">
+
+    <!-- ==================== DASHBOARD ==================== -->
+    <div class="page active" id="page-dashboard">
+        <h3 class="mb-3"><i class="fas fa-tachometer-alt text-blue"></i> Dashboard</h3>
+        <div class="stat-grid" id="dashboard-stats"></div>
+        <div class="card-custom">
+            <h5>Cotações</h5>
+            <div id="dashboard-quotes" class="row g-2"></div>
+        </div>
+        <div class="card-custom">
+            <h5>Gráfico PETR4</h5>
+            <canvas id="chart-dashboard" height="250"></canvas>
+        </div>
+    </div>
+
+    <!-- ==================== B3 DIÁRIO ==================== -->
+    <div class="page" id="page-bt-b3-daily">
+        <h3 class="mb-3"><i class="fas fa-calendar-day text-blue"></i> Back-teste B3 — Diário</h3>
+        <div class="card-custom">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Mercado / Ativos</label>
+                    <select class="form-select" id="daily-market">
+                        <option value="b3">B3 — Todos</option>
+                        <option value="custom">Ativos específicos</option>
+                    </select>
+                </div>
+                <div class="col-md-6" id="daily-tickers-wrap" style="display:none">
+                    <label class="form-label">Tickers (separados por vírgula)</label>
+                    <input class="form-control" id="daily-tickers" placeholder="PETR4,VALE3,ITUB4">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Volume médio a partir de (R$)</label>
+                    <input type="number" class="form-control" id="daily-min-volume" value="0" min="0">
+                </div>
+                <div class="col-12"><hr style="border-color:var(--border-color)"></div>
+                <div class="col-12 mb-2">
+                    <label class="form-label">Direção da Operação</label><br>
+                    <button class="btn btn-direction buy active" id="daily-dir-buy" onclick="setDirection('daily','compra')">
+                        <i class="fas fa-arrow-up"></i> COMPRA
+                    </button>
+                    <button class="btn btn-direction sell" id="daily-dir-sell" onclick="setDirection('daily','venda')">
+                        <i class="fas fa-arrow-down"></i> VENDA
+                    </button>
+                    <input type="hidden" id="daily-direction" value="compra">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Operação de Entrada</label>
+                    <select class="form-select" id="daily-entry-strategy"></select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Operação de Saída</label>
+                    <select class="form-select" id="daily-exit-strategy"></select>
+                </div>
+                <div class="col-md-4" id="daily-variation-wrap">
+                    <label class="form-label">Variação % (ex: -3 para -3%)</label>
+                    <input type="number" class="form-control" id="daily-variation" value="-2" step="0.1">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Data Início</label>
+                    <input type="date" class="form-control" id="daily-start-date">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Data Fim</label>
+                    <input type="date" class="form-control" id="daily-end-date">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Período (alternativo)</label>
+                    <select class="form-select" id="daily-period">
+                        <option value="3mo">3 meses</option>
+                        <option value="6mo">6 meses</option>
+                        <option value="1y" selected>1 ano</option>
+                        <option value="2y">2 anos</option>
+                        <option value="5y">5 anos</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Capital Inicial (R$)</label>
+                    <input type="number" class="form-control" id="daily-capital" value="10000" min="100">
+                </div>
+                <div class="col-12 mt-2">
+                    <button class="btn btn-primary btn-lg w-100" onclick="runDailyBacktest()">
+                        <i class="fas fa-play"></i> Executar Back-teste
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-custom" id="daily-results-card" style="display:none">
+            <h5>Resultados</h5>
+            <div class="table-responsive">
+                <table class="table table-dark table-striped table-hover" id="daily-results-table">
+                    <thead><tr>
+                        <th>Ação</th><th>Total Gain</th><th>% Gain</th>
+                        <th>Total Loss</th><th>% Loss</th><th>Total Trades</th>
+                        <th>Resultado %</th><th>Max DrawDown %</th>
+                        <th>Ganho Máximo %</th><th>Ganho Médio %</th><th>Volume Médio</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== B3 INTRADAY ==================== -->
+    <div class="page" id="page-bt-b3-intraday">
+        <h3 class="mb-3"><i class="fas fa-clock text-blue"></i> Back-teste B3 — Intraday</h3>
+        <div class="card-custom">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Mercado / Ativos</label>
+                    <select class="form-select" id="intra-b3-market">
+                        <option value="b3">B3 — Todos</option>
+                        <option value="custom">Ativos específicos</option>
+                    </select>
+                </div>
+                <div class="col-md-6" id="intra-b3-tickers-wrap" style="display:none">
+                    <label class="form-label">Tickers</label>
+                    <input class="form-control" id="intra-b3-tickers" placeholder="PETR4,VALE3">
+                </div>
+                <div class="col-12"><hr style="border-color:var(--border-color)"></div>
+                <div class="col-12 mb-2">
+                    <label class="form-label">Direção</label><br>
+                    <button class="btn btn-direction buy active" id="intra-b3-dir-buy" onclick="setDirection('intra-b3','compra')">
+                        <i class="fas fa-arrow-up"></i> COMPRA
+                    </button>
+                    <button class="btn btn-direction sell" id="intra-b3-dir-sell" onclick="setDirection('intra-b3','venda')">
+                        <i class="fas fa-arrow-down"></i> VENDA
+                    </button>
+                    <input type="hidden" id="intra-b3-direction" value="compra">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Operação de Entrada</label>
+                    <select class="form-select" id="intra-b3-entry-strategy"></select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Operação de Saída</label>
+                    <select class="form-select" id="intra-b3-exit-strategy"></select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Variação %</label>
+                    <input type="number" class="form-control" id="intra-b3-variation" value="-2" step="0.1">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Horário Início</label>
+                    <select class="form-select" id="intra-b3-hour-start"></select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Horário Fim</label>
+                    <select class="form-select" id="intra-b3-hour-end"></select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Horário Alvo (saída)</label>
+                    <select class="form-select" id="intra-b3-hour-target"></select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Ganho % (alvo)</label>
+                    <input type="number" class="form-control" id="intra-b3-target-pct" value="" step="0.1" placeholder="Ex: 1.5">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Stop Loss %</label>
+                    <input type="number" class="form-control" id="intra-b3-stop-pct" value="" step="0.1" placeholder="Ex: 1.0">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Máx trades/dia</label>
+                    <input type="number" class="form-control" id="intra-b3-max-trades" value="99" min="1">
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="intra-b3-close-eod" checked>
+                        <label class="form-check-label" for="intra-b3-close-eod">Fechar todas no dia</label>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Bollinger Períodos</label>
+                    <input type="number" class="form-control" id="intra-b3-bb-window" value="20" min="2">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Bollinger Desvio</label>
+                    <input type="number" class="form-control" id="intra-b3-bb-std" value="2" step="0.1" min="0.5">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Média Móvel Períodos</label>
+                    <input type="number" class="form-control" id="intra-b3-ma-period" value="20" min="2">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Período Dados</label>
+                    <select class="form-select" id="intra-b3-period">
+                        <option value="1mo">1 mês</option>
+                        <option value="3mo" selected>3 meses</option>
+                        <option value="6mo">6 meses</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Data Início</label>
+                    <input type="date" class="form-control" id="intra-b3-start-date">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Data Fim</label>
+                    <input type="date" class="form-control" id="intra-b3-end-date">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Capital Inicial</label>
+                    <input type="number" class="form-control" id="intra-b3-capital" value="10000" min="100">
+                </div>
+                <div class="col-12 mt-2">
+                    <button class="btn btn-primary btn-lg w-100" onclick="runIntradayBacktest('b3')">
+                        <i class="fas fa-play"></i> Executar Back-teste Intraday B3
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-custom" id="intra-b3-results-card" style="display:none">
+            <h5>Resultados</h5>
+            <div class="table-responsive">
+                <table class="table table-dark table-striped table-hover" id="intra-b3-results-table">
+                    <thead><tr>
+                        <th>Ação</th><th>Total Gain</th><th>% Gain</th>
+                        <th>Total Loss</th><th>% Loss</th><th>Total Trades</th>
+                        <th>Resultado %</th><th>Max DrawDown %</th>
+                        <th>Ganho Máximo %</th><th>Ganho Médio %</th><th>Volume Médio</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== BMF INTRADAY ==================== -->
+    <div class="page" id="page-bt-bmf-intraday">
+        <h3 class="mb-3"><i class="fas fa-exchange-alt text-blue"></i> Back-teste BMF — Intraday</h3>
+        <div class="card-custom">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Mercado</label>
+                    <select class="form-select" id="intra-bmf-market">
+                        <option value="bmf">BMF — Todos</option>
+                        <option value="custom">Ativos específicos</option>
+                    </select>
+                </div>
+                <div class="col-md-6" id="intra-bmf-tickers-wrap" style="display:none">
+                    <label class="form-label">Tickers</label>
+                    <input class="form-control" id="intra-bmf-tickers" placeholder="IBOV_FUT,DOL_FUT">
+                </div>
+                <div class="col-12"><hr style="border-color:var(--border-color)"></div>
+                <div class="col-12 mb-2">
+                    <label class="form-label">Direção</label><br>
+                    <button class="btn btn-direction buy active" id="intra-bmf-dir-buy" onclick="setDirection('intra-bmf','compra')">
+                        <i class="fas fa-arrow-up"></i> COMPRA
+                    </button>
+                    <button class="btn btn-direction sell" id="intra-bmf-dir-sell" onclick="setDirection('intra-bmf','venda')">
+                        <i class="fas fa-arrow-down"></i> VENDA
+                    </button>
+                    <input type="hidden" id="intra-bmf-direction" value="compra">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Operação de Entrada</label>
+                    <select class="form-select" id="intra-bmf-entry-strategy"></select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Operação de Saída</label>
+                    <select class="form-select" id="intra-bmf-exit-strategy"></select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Variação %</label>
+                    <input type="number" class="form-control" id="intra-bmf-variation" value="-2" step="0.1">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Horário Início</label>
+                    <select class="form-select" id="intra-bmf-hour-start"></select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Horário Fim</label>
+                    <select class="form-select" id="intra-bmf-hour-end"></select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Horário Alvo</label>
+                    <select class="form-select" id="intra-bmf-hour-target"></select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Ganho %</label>
+                    <input type="number" class="form-control" id="intra-bmf-target-pct" value="" step="0.1" placeholder="Ex: 1.5">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Stop Loss %</label>
+                    <input type="number" class="form-control" id="intra-bmf-stop-pct" value="" step="0.1" placeholder="Ex: 1.0">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Máx trades/dia</label>
+                    <input type="number" class="form-control" id="intra-bmf-max-trades" value="99" min="1">
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="intra-bmf-close-eod" checked>
+                        <label class="form-check-label" for="intra-bmf-close-eod">Fechar todas no dia</label>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">BB Períodos</label>
+                    <input type="number" class="form-control" id="intra-bmf-bb-window" value="20">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">BB Desvio</label>
+                    <input type="number" class="form-control" id="intra-bmf-bb-std" value="2" step="0.1">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">MA Períodos</label>
+                    <input type="number" class="form-control" id="intra-bmf-ma-period" value="20">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Período</label>
+                    <select class="form-select" id="intra-bmf-period">
+                        <option value="1mo">1 mês</option>
+                        <option value="3mo" selected>3 meses</option>
+                        <option value="6mo">6 meses</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Data Início</label>
+                    <input type="date" class="form-control" id="intra-bmf-start-date">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Data Fim</label>
+                    <input type="date" class="form-control" id="intra-bmf-end-date">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Capital</label>
+                    <input type="number" class="form-control" id="intra-bmf-capital" value="10000">
+                </div>
+                <div class="col-12 mt-2">
+                    <button class="btn btn-primary btn-lg w-100" onclick="runIntradayBacktest('bmf')">
+                        <i class="fas fa-play"></i> Executar Back-teste BMF Intraday
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-custom" id="intra-bmf-results-card" style="display:none">
+            <h5>Resultados</h5>
+            <div class="table-responsive">
+                <table class="table table-dark table-striped table-hover" id="intra-bmf-results-table">
+                    <thead><tr>
+                        <th>Ação</th><th>Total Gain</th><th>% Gain</th>
+                        <th>Total Loss</th><th>% Loss</th><th>Total Trades</th>
+                        <th>Resultado %</th><th>Max DrawDown %</th>
+                        <th>Ganho Máximo %</th><th>Ganho Médio %</th><th>Volume Médio</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== INDICADORES ==================== -->
+    <div class="page" id="page-bt-indicators">
+        <h3 class="mb-3"><i class="fas fa-wave-square text-blue"></i> Back-teste — Indicadores Técnicos</h3>
+        <div class="card-custom">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Ativo</label>
+                    <input class="form-control" id="ind-ticker" value="PETR4" placeholder="PETR4">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Estratégia</label>
+                    <select class="form-select" id="ind-strategy"></select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Período</label>
+                    <select class="form-select" id="ind-period">
+                        <option value="3mo">3 meses</option>
+                        <option value="6mo">6 meses</option>
+                        <option value="1y" selected>1 ano</option>
+                        <option value="2y">2 anos</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Intervalo</label>
+                    <select class="form-select" id="ind-interval">
+                        <option value="1d" selected>Diário</option>
+                        <option value="1h">1 hora</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Capital</label>
+                    <input type="number" class="form-control" id="ind-capital" value="10000">
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" onclick="runIndicatorBacktest()">
+                        <i class="fas fa-play"></i> Executar
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-custom" id="ind-results-card" style="display:none">
+            <h5>Resultado</h5>
+            <div class="stat-grid" id="ind-stats"></div>
+            <canvas id="chart-indicator" height="200"></canvas>
+        </div>
+    </div>
+
+    <!-- ==================== ESTRATÉGIAS ==================== -->
+    <div class="page" id="page-strategies">
+        <h3 class="mb-3"><i class="fas fa-list-check text-blue"></i> Estratégias Disponíveis</h3>
+        <div class="card-custom" id="strategies-list"></div>
+    </div>
+
+    <!-- ==================== SALVOS ==================== -->
+    <div class="page" id="page-saved">
+        <h3 class="mb-3"><i class="fas fa-bookmark text-blue"></i> Backtests Salvos</h3>
+        <div class="card-custom" id="saved-list"></div>
+    </div>
+
+    <!-- ==================== CONFIGURAÇÕES ==================== -->
+    <div class="page" id="page-config">
+        <h3 class="mb-3"><i class="fas fa-cog text-blue"></i> Configurações</h3>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card-custom">
+                    <h5>Autenticação PIN</h5>
+                    <input type="password" class="form-control mb-2" id="cfg-pin" placeholder="Digite o PIN">
+                    <button class="btn btn-primary w-100" onclick="verifyPin()">Verificar PIN</button>
+                    <div id="cfg-pin-result" class="mt-2"></div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card-custom">
+                    <h5>Estatísticas de Armazenamento</h5>
+                    <div id="cfg-storage-stats">Carregando...</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card-custom">
+                    <h5>Download de Dados</h5>
+                    <input type="text" class="form-control mb-2" id="cfg-dl-ticker" placeholder="Ticker (ex: PETR4)">
+                    <button class="btn btn-success w-100" onclick="downloadData()">
+                        <i class="fas fa-download"></i> Baixar Dados
+                    </button>
+                    <div id="cfg-dl-result" class="mt-2"></div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card-custom">
+                    <h5>Alterar PIN</h5>
+                    <input type="password" class="form-control mb-2" id="cfg-old-pin" placeholder="PIN atual">
+                    <input type="password" class="form-control mb-2" id="cfg-new-pin" placeholder="Novo PIN">
+                    <button class="btn btn-warning w-100" onclick="changePin()">Alterar PIN</button>
+                    <div id="cfg-pin-change-result" class="mt-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
