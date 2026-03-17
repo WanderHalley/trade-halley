@@ -1,69 +1,956 @@
-<!DOCTYPE html>
-<html lang="pt-BR" data-bs-theme="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trade Halley</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="css/style.css" rel="stylesheet">
-</head>
-<body>
-    <div class="d-flex" id="wrapper">
-        <!-- Sidebar -->
-        <div class="bg-dark border-end" id="sidebar" style="width:260px;min-height:100vh;">
-            <div class="sidebar-heading p-3 border-bottom">
-                <h5 class="mb-0 text-primary"><i class="bi bi-graph-up-arrow me-2"></i>Trade Halley</h5>
-                <small class="text-muted">Backtesting B3 & BMF</small>
-            </div>
-            <div class="list-group list-group-flush">
-                <a href="#" class="list-group-item list-group-item-action bg-dark text-light nav-link active" data-page="dashboard">
-                    <i class="bi bi-speedometer2 me-2"></i>Dashboard
-                </a>
-                <a href="#" class="list-group-item list-group-item-action bg-dark text-light nav-link" data-page="backtest">
-                    <i class="bi bi-graph-up me-2"></i>Backtest
-                </a>
-                <a href="#" class="list-group-item list-group-item-action bg-dark text-light nav-link" data-page="bulk">
-                    <i class="bi bi-collection me-2"></i>Backtest em Massa
-                </a>
-                <a href="#" class="list-group-item list-group-item-action bg-dark text-light nav-link" data-page="compare">
-                    <i class="bi bi-bar-chart me-2"></i>Comparar
-                </a>
-                <a href="#" class="list-group-item list-group-item-action bg-dark text-light nav-link" data-page="strategies">
-                    <i class="bi bi-lightbulb me-2"></i>Estratégias
-                </a>
-                <a href="#" class="list-group-item list-group-item-action bg-dark text-light nav-link" data-page="saved">
-                    <i class="bi bi-bookmark me-2"></i>Salvos
-                </a>
-                <a href="#" class="list-group-item list-group-item-action bg-dark text-light nav-link" data-page="config">
-                    <i class="bi bi-gear me-2"></i>Configurações
-                </a>
-            </div>
-        </div>
+"""
+Trade Halley API v3.0.0
+FastAPI backend — Trade Certo completo
+Suporta: Indicadores técnicos, Backtest Daily, Backtest Intraday
+Fonte de dados: brapi.dev + Supabase
+"""
 
-        <!-- Page Content -->
-        <div class="flex-grow-1">
-            <nav class="navbar navbar-dark bg-dark border-bottom px-3 d-md-none">
-                <button class="btn btn-outline-light btn-sm" onclick="document.getElementById('sidebar').classList.toggle('d-none')">
-                    <i class="bi bi-list"></i>
-                </button>
-                <span class="navbar-brand mb-0 ms-2">Trade Halley</span>
-            </nav>
-            <div class="container-fluid p-4" id="main-content">
-                <div class="text-center mt-5">
-                    <div class="spinner-border text-primary" role="status"></div>
-                    <p class="mt-3">Carregando Trade Halley...</p>
-                </div>
-            </div>
-        </div>
-    </div>
+from fastapi import FastAPI, HTTPException, Query, Path
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional, List
+import logging
+import uuid
+from datetime import datetime
 
-    <div id="toast-container" style="position:fixed;top:20px;right:20px;z-index:9999;"></div>
+# ─── Logging ───
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("trade_halley")
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+# ─── FastAPI App ───
+app = FastAPI(
+    title="Trade Halley API",
+    description="API Trade Certo — Back-tests B3 Daily, B3 Intraday, BMF Intraday (brapi.dev)",
+    version="3.0.0",
+)
 
-    <!-- APENAS app.js — NÃO carrega api.js separado -->
-    <script src="js/app.js"></script>
-</body>
-</html>
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ─── Pydantic Models ───
+class PinBody(BaseModel):
+    pin: str
+
+
+class PinChangeBody(BaseModel):
+    old_pin: str
+    new_pin: str
+
+
+class DownloadBody(BaseModel):
+    pin: str
+    ticker: str
+    start_date: str = ""
+    end_date: str = ""
+    timeframe: str = "daily"
+
+
+class UpdateAllBody(BaseModel):
+    pin: str
+
+
+class SaveBacktestBody(BaseModel):
+    result: dict
+
+
+class BacktestDailyBody(BaseModel):
+    ticker: Optional[str] = None
+    tickers: Optional[List[str]] = None
+    market: Optional[str] = None
+    entry_strategy: str
+    exit_strategy: str
+    direction: str = "compra"
+    variation_pct: float = 0.0
+    period: str = "1y"
+    initial_capital: float = 10000.0
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+
+class BacktestIntradayBody(BaseModel):
+    ticker: Optional[str] = None
+    tickers: Optional[List[str]] = None
+    market: Optional[str] = None
+    entry_strategy: str
+    exit_strategy: str
+    direction: str = "compra"
+    variation_pct: float = 0.0
+    hour_start: str = "09:00"
+    hour_end: str = "17:00"
+    hour_target: Optional[str] = None
+    target_pct: Optional[float] = None
+    stop_loss_pct: Optional[float] = None
+    close_eod: bool = True
+    max_trades_per_day: int = 99
+    bb_window: int = 20
+    bb_std: float = 2.0
+    ma_period: int = 20
+    period: str = "3mo"
+    initial_capital: float = 10000.0
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+
+# ─── Startup ───
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Trade Halley API v3.0 starting...")
+    try:
+        from scheduler import start_scheduler
+        start_scheduler()
+        logger.info("Scheduler started")
+    except Exception as e:
+        logger.warning(f"Scheduler not started: {e}")
+
+
+# ═══════════════════════════════════════════
+# ROOT & HEALTH
+# ═══════════════════════════════════════════
+
+@app.get("/")
+async def root():
+    return {
+        "name": "Trade Halley API",
+        "version": "3.0.0",
+        "status": "online",
+        "data_source": "brapi.dev",
+        "endpoints": [
+            "/health",
+            "/assets",
+            "/asset/{ticker}",
+            "/market-data/{ticker}",
+            "/strategies",
+            "/strategies/all",
+            "/strategies/daily/entry",
+            "/strategies/daily/exit",
+            "/strategies/intraday/entry",
+            "/strategies/intraday/exit",
+            "/backtest",
+            "/backtest/bulk",
+            "/backtest/compare",
+            "/backtest/daily",
+            "/backtest/daily/bulk",
+            "/backtest/intraday",
+            "/backtest/intraday/bulk",
+            "/backtests/save",
+            "/backtests/saved",
+            "/backtests/saved/{id}",
+            "/dashboard/summary",
+            "/config/verify-pin",
+            "/config/change-pin",
+            "/config/validate-ticker/{ticker}",
+            "/config/download-data",
+            "/config/update-all",
+            "/config/asset/{ticker}",
+            "/config/assets",
+            "/storage/stats",
+        ],
+    }
+
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "version": "3.0.0", "timestamp": datetime.utcnow().isoformat()}
+
+
+# ═══════════════════════════════════════════
+# CONFIG — PIN
+# ═══════════════════════════════════════════
+
+@app.post("/config/verify-pin")
+async def verify_pin_endpoint(body: PinBody):
+    try:
+        from storage_manager import verify_pin
+        valid = verify_pin(body.pin)
+        return {"valid": valid}
+    except Exception as e:
+        logger.error(f"verify_pin error: {e}")
+        raise HTTPException(500, str(e))
+
+
+@app.post("/config/change-pin")
+async def change_pin_endpoint(body: PinChangeBody):
+    try:
+        from storage_manager import verify_pin, change_pin
+        if not verify_pin(body.old_pin):
+            raise HTTPException(403, "PIN atual incorreto")
+        change_pin(body.old_pin, body.new_pin)
+        return {"success": True, "message": "PIN alterado com sucesso"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"change_pin error: {e}")
+        raise HTTPException(500, str(e))
+
+
+# ═══════════════════════════════════════════
+# STORAGE STATS
+# ═══════════════════════════════════════════
+
+@app.get("/storage/stats")
+async def storage_stats():
+    try:
+        from storage_manager import get_storage_stats
+        stats = get_storage_stats()
+        return stats
+    except Exception as e:
+        logger.error(f"storage_stats error: {e}")
+        return {
+            "total_assets": 0,
+            "daily_assets": 0,
+            "intraday_assets": 0,
+            "total_records": 0,
+            "total_backtests": 0,
+            "storage_type": "supabase",
+            "last_auto_update": None,
+        }
+
+# ═══════════════════════════════════════════
+# CONFIG — TICKER VALIDATION
+# ═══════════════════════════════════════════
+
+@app.get("/config/validate-ticker/{ticker}")
+async def validate_ticker_endpoint(ticker: str = Path(...)):
+    try:
+        from data_fetcher import validate_ticker
+        result = validate_ticker(ticker)
+        return result
+    except Exception as e:
+        logger.error(f"validate_ticker error: {e}")
+        return {"valid": False, "ticker": ticker, "name": None, "last_price": None}
+
+
+# ═══════════════════════════════════════════
+# CONFIG — DOWNLOAD DATA
+# ═══════════════════════════════════════════
+
+@app.post("/config/download-data")
+async def download_data_endpoint(body: DownloadBody):
+    try:
+        from storage_manager import verify_pin
+        if not verify_pin(body.pin):
+            raise HTTPException(403, "PIN incorreto")
+
+        from data_fetcher import download_asset_data
+        result = download_asset_data(
+            ticker=body.ticker,
+            start_date=body.start_date,
+            end_date=body.end_date,
+            timeframe=body.timeframe,
+        )
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"download_data error: {e}")
+        raise HTTPException(500, str(e))
+
+
+# ═══════════════════════════════════════════
+# CONFIG — UPDATE ALL
+# ═══════════════════════════════════════════
+
+@app.post("/config/update-all")
+async def update_all_endpoint(body: UpdateAllBody):
+    try:
+        from storage_manager import verify_pin
+        if not verify_pin(body.pin):
+            raise HTTPException(403, "PIN incorreto")
+
+        from data_fetcher import download_asset_data, B3_TICKERS
+        results = []
+        for ticker in list(B3_TICKERS.keys())[:10]:
+            try:
+                r = download_asset_data(ticker)
+                results.append(r)
+            except Exception as e:
+                results.append({"success": False, "ticker": ticker, "message": str(e)})
+
+        success_count = sum(1 for r in results if r.get("success"))
+        return {
+            "success": True,
+            "message": f"Atualização concluída: {success_count}/{len(results)} ativos",
+            "results": results,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"update_all error: {e}")
+        raise HTTPException(500, str(e))
+
+
+# ═══════════════════════════════════════════
+# CONFIG — DELETE ASSET
+# ═══════════════════════════════════════════
+
+@app.delete("/config/asset/{ticker}")
+async def delete_asset_endpoint(
+    ticker: str = Path(...),
+    pin: str = Query(...),
+):
+    try:
+        from storage_manager import verify_pin, delete_asset
+        if not verify_pin(pin):
+            raise HTTPException(403, "PIN incorreto")
+        delete_asset(ticker)
+        return {"success": True, "message": f"Ativo {ticker} removido"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"delete_asset error: {e}")
+        raise HTTPException(500, str(e))
+
+
+# ═══════════════════════════════════════════
+# CONFIG — LIST SAVED ASSETS
+# ═══════════════════════════════════════════
+
+@app.get("/config/assets")
+async def list_saved_assets():
+    try:
+        from storage_manager import list_assets
+        assets = list_assets()
+        return {"assets": assets}
+    except Exception as e:
+        logger.error(f"list_saved_assets error: {e}")
+        return {"assets": []}
+
+
+# ═══════════════════════════════════════════
+# ASSETS
+# ═══════════════════════════════════════════
+
+@app.get("/assets")
+async def get_assets(
+    market: str = Query("all", enum=["all", "b3", "bmf"]),
+):
+    from data_fetcher import B3_TICKERS, BMF_TICKERS
+
+    b3_list = [{"ticker": k, "yahoo_ticker": f"{k}.SA"} for k in B3_TICKERS]
+    bmf_list = [
+        {"ticker": "IBOV_FUT", "yahoo_ticker": "^BVSP"},
+        {"ticker": "DOL_FUT", "yahoo_ticker": "USDBRL=X"},
+        {"ticker": "SP500", "yahoo_ticker": "ES=F"},
+        {"ticker": "NASDAQ", "yahoo_ticker": "NQ=F"},
+        {"ticker": "DOW", "yahoo_ticker": "YM=F"},
+        {"ticker": "CRUDE_OIL", "yahoo_ticker": "CL=F"},
+        {"ticker": "GOLD", "yahoo_ticker": "GC=F"},
+        {"ticker": "SILVER", "yahoo_ticker": "SI=F"},
+        {"ticker": "EURO_FX", "yahoo_ticker": "EURUSD=X"},
+        {"ticker": "BITCOIN", "yahoo_ticker": "BTC-USD"},
+    ]
+
+    if market == "b3":
+        return {"b3": b3_list}
+    elif market == "bmf":
+        return {"bmf": bmf_list}
+    return {"b3": b3_list, "bmf": bmf_list}
+
+
+# ═══════════════════════════════════════════
+# ASSET INFO
+# ═══════════════════════════════════════════
+
+@app.get("/asset/{ticker}")
+async def get_asset_info_endpoint(ticker: str = Path(...)):
+    try:
+        from data_fetcher import get_stock_info
+        info = get_stock_info(ticker)
+        return info
+    except Exception as e:
+        logger.error(f"get_asset_info error: {e}")
+        raise HTTPException(500, str(e))
+
+
+# ═══════════════════════════════════════════
+# MARKET DATA
+# ═══════════════════════════════════════════
+
+@app.get("/market-data/{ticker}")
+async def get_market_data(
+    ticker: str = Path(...),
+    period: str = Query("3mo", enum=["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y"]),
+    interval: str = Query("1d", enum=["1m", "5m", "15m", "30m", "1h", "1d", "1wk"]),
+):
+    try:
+        from data_fetcher import get_stock_data
+        data = get_stock_data(ticker, period=period, interval=interval)
+        if not data:
+            raise HTTPException(404, f"Sem dados para {ticker}")
+        return {
+            "ticker": ticker,
+            "period": period,
+            "interval": interval,
+            "records": len(data),
+            "data": data,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"market_data error for {ticker}: {e}")
+        raise HTTPException(500, str(e))
+
+# ═══════════════════════════════════════════
+# STRATEGIES — LISTAGEM
+# ═══════════════════════════════════════════
+
+@app.get("/strategies")
+async def get_strategies():
+    """Lista estratégias de indicadores técnicos (compatibilidade)."""
+    try:
+        from strategies import list_strategies
+        strats = list_strategies()
+        return {"strategies": strats}
+    except Exception as e:
+        logger.error(f"strategies error: {e}")
+        return {"strategies": []}
+
+
+@app.get("/strategies/all")
+async def get_all_strategies():
+    """Lista TODAS as estratégias organizadas por tipo."""
+    try:
+        from strategies import list_all_strategies
+        return list_all_strategies()
+    except Exception as e:
+        logger.error(f"strategies/all error: {e}")
+        return {
+            "indicator_strategies": [],
+            "daily_entry": [],
+            "daily_exit": [],
+            "intraday_entry": [],
+            "intraday_exit": [],
+        }
+
+
+@app.get("/strategies/daily/entry")
+async def get_daily_entry_strategies():
+    """Lista estratégias de ENTRADA para timeframe diário."""
+    try:
+        from strategies import list_entry_strategies_daily
+        return {"strategies": list_entry_strategies_daily()}
+    except Exception as e:
+        logger.error(f"daily entry strategies error: {e}")
+        return {"strategies": []}
+
+
+@app.get("/strategies/daily/exit")
+async def get_daily_exit_strategies():
+    """Lista estratégias de SAÍDA para timeframe diário."""
+    try:
+        from strategies import list_exit_strategies_daily
+        return {"strategies": list_exit_strategies_daily()}
+    except Exception as e:
+        logger.error(f"daily exit strategies error: {e}")
+        return {"strategies": []}
+
+
+@app.get("/strategies/intraday/entry")
+async def get_intraday_entry_strategies():
+    """Lista estratégias de ENTRADA para intraday."""
+    try:
+        from strategies import list_entry_strategies_intraday
+        return {"strategies": list_entry_strategies_intraday()}
+    except Exception as e:
+        logger.error(f"intraday entry strategies error: {e}")
+        return {"strategies": []}
+
+
+@app.get("/strategies/intraday/exit")
+async def get_intraday_exit_strategies():
+    """Lista estratégias de SAÍDA para intraday."""
+    try:
+        from strategies import list_exit_strategies_intraday
+        return {"strategies": list_exit_strategies_intraday()}
+    except Exception as e:
+        logger.error(f"intraday exit strategies error: {e}")
+        return {"strategies": []}
+
+
+# ═══════════════════════════════════════════
+# BACKTEST — INDICADORES TÉCNICOS (compatibilidade v2.2)
+# ═══════════════════════════════════════════
+
+@app.get("/backtest")
+async def backtest_endpoint(
+    ticker: str = Query(..., description="Codigo do ativo (ex: PETR4)"),
+    strategy: str = Query(..., description="ID da estrategia"),
+    period: str = Query("1y", enum=["3mo", "6mo", "1y", "2y", "5y"]),
+    interval: str = Query("1d", enum=["1h", "1d"]),
+    capital: float = Query(10000.0, ge=100, le=10_000_000),
+    stop_loss: Optional[float] = Query(None, ge=0.001, le=0.5),
+    take_profit: Optional[float] = Query(None, ge=0.001, le=1.0),
+):
+    try:
+        from backtest_engine import run_backtest
+        result = run_backtest(
+            ticker=ticker,
+            strategy_id=strategy,
+            period=period,
+            interval=interval,
+            initial_capital=capital,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+        )
+        if not result:
+            raise HTTPException(404, f"Não foi possível executar backtest para {ticker}")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"backtest error: {e}")
+        raise HTTPException(500, str(e))
+
+
+@app.get("/backtest/bulk")
+async def backtest_bulk(
+    market: str = Query("b3", enum=["b3", "bmf"]),
+    strategy: str = Query(..., description="ID da estrategia"),
+    period: str = Query("1y", enum=["3mo", "6mo", "1y", "2y"]),
+    interval: str = Query("1d", enum=["1h", "1d"]),
+    capital: float = Query(10000.0, ge=100, le=10_000_000),
+):
+    try:
+        from data_fetcher import B3_TICKERS, BMF_TICKERS
+        from backtest_engine import run_bulk_backtest
+
+        tickers = list(B3_TICKERS.keys()) if market == "b3" else list(BMF_TICKERS.keys())
+        results = run_bulk_backtest(
+            tickers=tickers,
+            strategy_id=strategy,
+            period=period,
+            interval=interval,
+            initial_capital=capital,
+        )
+        return {
+            "market": market,
+            "strategy": strategy,
+            "period": period,
+            "interval": interval,
+            "total_tested": len(results),
+            "results": results,
+        }
+    except Exception as e:
+        logger.error(f"bulk backtest error: {e}")
+        raise HTTPException(500, str(e))
+
+
+@app.get("/backtest/compare")
+async def backtest_compare(
+    ticker: str = Query(..., description="Codigo do ativo"),
+    period: str = Query("1y", enum=["3mo", "6mo", "1y", "2y"]),
+    interval: str = Query("1d", enum=["1h", "1d"]),
+    capital: float = Query(10000.0, ge=100, le=10_000_000),
+):
+    try:
+        from backtest_engine import run_backtest
+        from strategies import list_strategies
+
+        strats = list_strategies()
+        results = []
+        for s in strats:
+            try:
+                r = run_backtest(
+                    ticker=ticker, strategy_id=s["id"],
+                    period=period, interval=interval, initial_capital=capital,
+                )
+                if r:
+                    results.append(r)
+            except Exception as e:
+                logger.warning(f"Compare skip {s['id']}: {e}")
+
+        results.sort(
+            key=lambda x: x.get("metrics", {}).get("total_return_pct", 0),
+            reverse=True,
+        )
+        return {
+            "ticker": ticker,
+            "period": period,
+            "interval": interval,
+            "total_strategies": len(results),
+            "results": results,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"compare error: {e}")
+        raise HTTPException(500, str(e))
+
+
+# ═══════════════════════════════════════════
+# BACKTEST — TRADE CERTO DAILY
+# ═══════════════════════════════════════════
+
+def _resolve_tickers(body_ticker, body_tickers, body_market):
+    """Helper: resolve lista de tickers a partir de ticker/tickers/market."""
+    from data_fetcher import B3_TICKERS, BMF_TICKERS
+
+    if body_tickers and len(body_tickers) > 0:
+        return body_tickers
+
+    if body_ticker:
+        return [body_ticker]
+
+    if body_market:
+        m = body_market.lower()
+        if m == "b3":
+            return list(B3_TICKERS.keys())
+        elif m == "bmf":
+            return list(BMF_TICKERS.keys())
+        elif m == "all":
+            return list(B3_TICKERS.keys()) + list(BMF_TICKERS.keys())
+
+    return []
+
+
+@app.post("/backtest/daily")
+async def backtest_daily_endpoint(body: BacktestDailyBody):
+    """
+    Backtest Trade Certo — Timeframe Diário.
+    Aceita um ticker, lista de tickers, ou mercado inteiro.
+    """
+    try:
+        tickers = _resolve_tickers(body.ticker, body.tickers, body.market)
+        if not tickers:
+            raise HTTPException(400, "Informe ticker, tickers ou market")
+
+        if len(tickers) == 1:
+            # Single backtest
+            from backtest_engine import run_backtest_daily
+            result = run_backtest_daily(
+                ticker=tickers[0],
+                entry_strategy_id=body.entry_strategy,
+                exit_strategy_id=body.exit_strategy,
+                direction=body.direction,
+                variation_pct=body.variation_pct,
+                period=body.period,
+                initial_capital=body.initial_capital,
+                start_date=body.start_date,
+                end_date=body.end_date,
+            )
+            if not result:
+                raise HTTPException(404, f"Sem dados para {tickers[0]}")
+            return result
+        else:
+            # Bulk backtest
+            from backtest_engine import run_bulk_backtest_daily
+            results = run_bulk_backtest_daily(
+                tickers=tickers,
+                entry_strategy_id=body.entry_strategy,
+                exit_strategy_id=body.exit_strategy,
+                direction=body.direction,
+                variation_pct=body.variation_pct,
+                period=body.period,
+                initial_capital=body.initial_capital,
+                start_date=body.start_date,
+                end_date=body.end_date,
+            )
+            return {
+                "entry_strategy": body.entry_strategy,
+                "exit_strategy": body.exit_strategy,
+                "direction": body.direction,
+                "variation_pct": body.variation_pct,
+                "period": body.period,
+                "total_tested": len(results),
+                "results": results,
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"backtest daily error: {e}")
+        raise HTTPException(500, str(e))
+
+
+@app.post("/backtest/daily/bulk")
+async def backtest_daily_bulk_endpoint(body: BacktestDailyBody):
+    """Backtest Trade Certo Daily — múltiplos ativos (alias)."""
+    try:
+        tickers = _resolve_tickers(body.ticker, body.tickers, body.market)
+        if not tickers:
+            raise HTTPException(400, "Informe ticker, tickers ou market")
+
+        from backtest_engine import run_bulk_backtest_daily
+        results = run_bulk_backtest_daily(
+            tickers=tickers,
+            entry_strategy_id=body.entry_strategy,
+            exit_strategy_id=body.exit_strategy,
+            direction=body.direction,
+            variation_pct=body.variation_pct,
+            period=body.period,
+            initial_capital=body.initial_capital,
+            start_date=body.start_date,
+            end_date=body.end_date,
+        )
+        return {
+            "entry_strategy": body.entry_strategy,
+            "exit_strategy": body.exit_strategy,
+            "direction": body.direction,
+            "variation_pct": body.variation_pct,
+            "period": body.period,
+            "total_tested": len(results),
+            "results": results,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"backtest daily bulk error: {e}")
+        raise HTTPException(500, str(e))
+
+# ═══════════════════════════════════════════
+# BACKTEST — TRADE CERTO INTRADAY
+# ═══════════════════════════════════════════
+
+@app.post("/backtest/intraday")
+async def backtest_intraday_endpoint(body: BacktestIntradayBody):
+    """
+    Backtest Trade Certo — Intraday.
+    Aceita ticker único, lista, ou mercado.
+    """
+    try:
+        tickers = _resolve_tickers(body.ticker, body.tickers, body.market)
+        if not tickers:
+            raise HTTPException(400, "Informe ticker, tickers ou market")
+
+        if len(tickers) == 1:
+            from backtest_engine import run_backtest_intraday
+            result = run_backtest_intraday(
+                ticker=tickers[0],
+                entry_strategy_id=body.entry_strategy,
+                exit_strategy_id=body.exit_strategy,
+                direction=body.direction,
+                variation_pct=body.variation_pct,
+                hour_start=body.hour_start,
+                hour_end=body.hour_end,
+                hour_target=body.hour_target,
+                target_pct=body.target_pct,
+                stop_loss_pct=body.stop_loss_pct,
+                close_eod=body.close_eod,
+                max_trades_per_day=body.max_trades_per_day,
+                bb_window=body.bb_window,
+                bb_std=body.bb_std,
+                ma_period=body.ma_period,
+                period=body.period,
+                initial_capital=body.initial_capital,
+                start_date=body.start_date,
+                end_date=body.end_date,
+            )
+            if not result:
+                raise HTTPException(404, f"Sem dados intraday para {tickers[0]}")
+            return result
+        else:
+            from backtest_engine import run_bulk_backtest_intraday
+            results = run_bulk_backtest_intraday(
+                tickers=tickers,
+                entry_strategy_id=body.entry_strategy,
+                exit_strategy_id=body.exit_strategy,
+                direction=body.direction,
+                variation_pct=body.variation_pct,
+                hour_start=body.hour_start,
+                hour_end=body.hour_end,
+                hour_target=body.hour_target,
+                target_pct=body.target_pct,
+                stop_loss_pct=body.stop_loss_pct,
+                close_eod=body.close_eod,
+                max_trades_per_day=body.max_trades_per_day,
+                bb_window=body.bb_window,
+                bb_std=body.bb_std,
+                ma_period=body.ma_period,
+                period=body.period,
+                initial_capital=body.initial_capital,
+                start_date=body.start_date,
+                end_date=body.end_date,
+            )
+            return {
+                "entry_strategy": body.entry_strategy,
+                "exit_strategy": body.exit_strategy,
+                "direction": body.direction,
+                "variation_pct": body.variation_pct,
+                "hour_start": body.hour_start,
+                "hour_end": body.hour_end,
+                "period": body.period,
+                "total_tested": len(results),
+                "results": results,
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"backtest intraday error: {e}")
+        raise HTTPException(500, str(e))
+
+
+@app.post("/backtest/intraday/bulk")
+async def backtest_intraday_bulk_endpoint(body: BacktestIntradayBody):
+    """Backtest Trade Certo Intraday — múltiplos ativos (alias)."""
+    try:
+        tickers = _resolve_tickers(body.ticker, body.tickers, body.market)
+        if not tickers:
+            raise HTTPException(400, "Informe ticker, tickers ou market")
+
+        from backtest_engine import run_bulk_backtest_intraday
+        results = run_bulk_backtest_intraday(
+            tickers=tickers,
+            entry_strategy_id=body.entry_strategy,
+            exit_strategy_id=body.exit_strategy,
+            direction=body.direction,
+            variation_pct=body.variation_pct,
+            hour_start=body.hour_start,
+            hour_end=body.hour_end,
+            hour_target=body.hour_target,
+            target_pct=body.target_pct,
+            stop_loss_pct=body.stop_loss_pct,
+            close_eod=body.close_eod,
+            max_trades_per_day=body.max_trades_per_day,
+            bb_window=body.bb_window,
+            bb_std=body.bb_std,
+            ma_period=body.ma_period,
+            period=body.period,
+            initial_capital=body.initial_capital,
+            start_date=body.start_date,
+            end_date=body.end_date,
+        )
+        return {
+            "entry_strategy": body.entry_strategy,
+            "exit_strategy": body.exit_strategy,
+            "direction": body.direction,
+            "variation_pct": body.variation_pct,
+            "hour_start": body.hour_start,
+            "hour_end": body.hour_end,
+            "period": body.period,
+            "total_tested": len(results),
+            "results": results,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"backtest intraday bulk error: {e}")
+        raise HTTPException(500, str(e))
+
+
+# ═══════════════════════════════════════════
+# SAVED BACKTESTS
+# ═══════════════════════════════════════════
+
+@app.post("/backtests/save")
+async def save_backtest_endpoint(body: SaveBacktestBody):
+    try:
+        from storage_manager import save_backtest
+        bt_id = str(uuid.uuid4())[:8]
+        body.result["id"] = bt_id
+        body.result["saved_at"] = datetime.utcnow().isoformat()
+        save_backtest(bt_id, body.result)
+        return {"success": True, "id": bt_id, "message": "Backtest salvo"}
+    except Exception as e:
+        logger.error(f"save_backtest error: {e}")
+        raise HTTPException(500, str(e))
+
+
+@app.get("/backtests/saved")
+async def list_saved_backtests():
+    try:
+        from storage_manager import list_backtests
+        backtests = list_backtests()
+        return {"backtests": backtests}
+    except Exception as e:
+        logger.error(f"list_backtests error: {e}")
+        return {"backtests": []}
+
+
+@app.get("/backtests/saved/{bt_id}")
+async def get_saved_backtest(bt_id: str = Path(...)):
+    try:
+        from storage_manager import load_backtest
+        bt = load_backtest(bt_id)
+        if not bt:
+            raise HTTPException(404, "Backtest não encontrado")
+        return bt
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"get_backtest error: {e}")
+        raise HTTPException(500, str(e))
+
+
+@app.delete("/backtests/saved/{bt_id}")
+async def delete_saved_backtest(bt_id: str = Path(...)):
+    try:
+        from storage_manager import delete_backtest
+        delete_backtest(bt_id)
+        return {"success": True, "message": "Backtest removido"}
+    except Exception as e:
+        logger.error(f"delete_backtest error: {e}")
+        raise HTTPException(500, str(e))
+
+
+# ═══════════════════════════════════════════
+# DASHBOARD SUMMARY
+# ═══════════════════════════════════════════
+
+@app.get("/dashboard/summary")
+async def dashboard_summary():
+    try:
+        from data_fetcher import (
+            get_stock_info,
+            B3_TICKERS,
+            BMF_TICKERS,
+            DASHBOARD_TICKERS,
+        )
+
+        top_tickers = []
+        for label, brapi_sym in DASHBOARD_TICKERS.items():
+            try:
+                info = get_stock_info(label)
+                if info and info.get("price") is not None:
+                    top_tickers.append(info)
+            except Exception as e:
+                logger.warning(f"Dashboard skip {label}: {e}")
+
+        strategy_count = 13
+        daily_entry_count = 7
+        daily_exit_count = 3
+        intraday_entry_count = 12
+        intraday_exit_count = 7
+
+        try:
+            from strategies import (
+                list_strategies,
+                list_entry_strategies_daily,
+                list_exit_strategies_daily,
+                list_entry_strategies_intraday,
+                list_exit_strategies_intraday,
+            )
+            strategy_count = len(list_strategies())
+            daily_entry_count = len(list_entry_strategies_daily())
+            daily_exit_count = len(list_exit_strategies_daily())
+            intraday_entry_count = len(list_entry_strategies_intraday())
+            intraday_exit_count = len(list_exit_strategies_intraday())
+        except Exception:
+            pass
+
+        return {
+            "top_tickers": top_tickers,
+            "total_b3": len(B3_TICKERS),
+            "total_bmf": len(BMF_TICKERS),
+            "total_strategies": strategy_count,
+            "total_daily_entry": daily_entry_count,
+            "total_daily_exit": daily_exit_count,
+            "total_intraday_entry": intraday_entry_count,
+            "total_intraday_exit": intraday_exit_count,
+        }
+    except Exception as e:
+        logger.error(f"dashboard_summary error: {e}")
+        return {
+            "top_tickers": [],
+            "total_b3": 30,
+            "total_bmf": 10,
+            "total_strategies": 13,
+            "total_daily_entry": 7,
+            "total_daily_exit": 3,
+            "total_intraday_entry": 12,
+            "total_intraday_exit": 7,
+        }
