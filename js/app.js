@@ -1,746 +1,704 @@
-/**
- * Trade Halley - App v2.2
- * Arquivo único — inclui API helper + SPA completo
- */
+/* ============================================================
+   Trade Halley — Frontend Trade Certo v3.0
+   Arquivo único: js/app.js
+   ============================================================ */
 
-/* ═══════════════════════════════════════════
-   CONFIGURAÇÃO GLOBAL
-   ═══════════════════════════════════════════ */
+(function () {
+"use strict";
 
-var APP = {
-    API_BASE: 'https://wanderhalleylee-trade-halley.hf.space',
-    BRAPI_BASE: 'https://brapi.dev/api',
-    BRAPI_TOKEN: 'ktC3hLVgH3QXrFnssfbcUj',
-    pin: null,
-    currentPage: 'dashboard',
-    charts: {},
-    _lastBacktest: null
+// ─── CONFIG ───
+const CONFIG = {
+    API_BASE: "https://wanderhalleylee-trade-halley.hf.space",
+    BRAPI_BASE: "https://brapi.dev/api",
+    BRAPI_TOKEN: "ktC3hLVgH3QXrFnssfbcUj",
 };
 
-/* ═══════════════════════════════════════════
-   API HELPER (substituiu api.js)
-   ═══════════════════════════════════════════ */
-
-var TradeAPI = {
-    get: async function(endpoint) {
+// ─── API HELPER ───
+const API = {
+    async get(path) {
         try {
-            var resp = await fetch(APP.API_BASE + endpoint);
-            if (!resp.ok) throw new Error('HTTP ' + resp.status);
-            return await resp.json();
+            const r = await fetch(CONFIG.API_BASE + path);
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return await r.json();
         } catch (e) {
-            console.error('API GET ' + endpoint + ':', e);
+            console.error("API GET error:", path, e);
             return null;
         }
     },
-
-    post: async function(endpoint, body) {
+    async post(path, body) {
         try {
-            var resp = await fetch(APP.API_BASE + endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
+            const r = await fetch(CONFIG.API_BASE + path, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
             });
-            if (!resp.ok) throw new Error('HTTP ' + resp.status);
-            return await resp.json();
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return await r.json();
         } catch (e) {
-            console.error('API POST ' + endpoint + ':', e);
+            console.error("API POST error:", path, e);
             return null;
         }
     },
-
-    del: async function(endpoint) {
+    async del(path) {
         try {
-            var resp = await fetch(APP.API_BASE + endpoint, { method: 'DELETE' });
-            if (!resp.ok) throw new Error('HTTP ' + resp.status);
-            return await resp.json();
+            const r = await fetch(CONFIG.API_BASE + path, { method: "DELETE" });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return await r.json();
         } catch (e) {
-            console.error('API DELETE ' + endpoint + ':', e);
+            console.error("API DELETE error:", path, e);
             return null;
         }
     },
-
-    brapiQuote: async function(ticker) {
-        try {
-            var url = APP.BRAPI_BASE + '/quote/' + encodeURIComponent(ticker) + '?token=' + APP.BRAPI_TOKEN;
-            var resp = await fetch(url);
-            if (!resp.ok) return null;
-            var data = await resp.json();
-            return (data.results && data.results[0]) ? data.results[0] : null;
-        } catch (e) {
-            console.error('brapi quote ' + ticker + ':', e);
-            return null;
-        }
-    },
-
-    brapiHistory: async function(ticker, range, interval) {
-        range = range || '3mo';
-        interval = interval || '1d';
-        try {
-            var url = APP.BRAPI_BASE + '/quote/' + encodeURIComponent(ticker) +
-                '?range=' + range + '&interval=' + interval + '&token=' + APP.BRAPI_TOKEN;
-            var resp = await fetch(url);
-            if (!resp.ok) return [];
-            var data = await resp.json();
-            var r = data.results && data.results[0];
-            return r ? (r.historicalDataPrice || []) : [];
-        } catch (e) {
-            console.error('brapi history ' + ticker + ':', e);
-            return [];
-        }
-    }
 };
 
-/* ═══════════════════════════════════════════
-   NAVIGATION
-   ═══════════════════════════════════════════ */
+// ─── SPINNER ───
+function showSpinner() { document.getElementById("spinner").classList.add("show"); }
+function hideSpinner() { document.getElementById("spinner").classList.remove("show"); }
 
-function navigate(page) {
-    APP.currentPage = page;
-    document.querySelectorAll('.nav-link').forEach(function(el) { el.classList.remove('active'); });
-    var activeLink = document.querySelector('.nav-link[data-page="' + page + '"]');
-    if (activeLink) activeLink.classList.add('active');
+// ─── NAVIGATION ───
+function navigate(pageId) {
+    document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+    document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
+    const page = document.getElementById("page-" + pageId);
+    if (page) page.classList.add("active");
+    const nav = document.querySelector(`.nav-item[data-page="${pageId}"]`);
+    if (nav) nav.classList.add("active");
 
-    var content = document.getElementById('main-content');
-    if (!content) return;
-
-    switch (page) {
-        case 'dashboard':  renderDashboard(); break;
-        case 'backtest':   renderBacktest(); break;
-        case 'bulk':       renderBulk(); break;
-        case 'compare':    renderCompare(); break;
-        case 'strategies': renderStrategies(); break;
-        case 'saved':      renderSaved(); break;
-        case 'config':     renderConfig(); break;
-        default:           renderDashboard();
-    }
+    // Lazy load page data
+    if (pageId === "dashboard") loadDashboard();
+    else if (pageId === "strategies") loadStrategiesPage();
+    else if (pageId === "saved") loadSavedBacktests();
+    else if (pageId === "config") loadStorageStats();
+    else if (pageId === "bt-b3-daily") initDailyForm();
+    else if (pageId === "bt-b3-intraday") initIntradayForm("b3");
+    else if (pageId === "bt-bmf-intraday") initIntradayForm("bmf");
+    else if (pageId === "bt-indicators") initIndicatorForm();
 }
 
-/* ═══════════════════════════════════════════
-   UTILITIES
-   ═══════════════════════════════════════════ */
+// Bind sidebar clicks
+document.querySelectorAll(".nav-item[data-page]").forEach(btn => {
+    btn.addEventListener("click", () => navigate(btn.dataset.page));
+});
 
-function fmt(n, decimals) {
-    decimals = (decimals != null) ? decimals : 2;
-    if (n == null || isNaN(n)) return '—';
-    return Number(n).toLocaleString('pt-BR', {
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals
+// ─── UTILITIES ───
+function fmt(n, d = 2) {
+    if (n == null || isNaN(n)) return "—";
+    return Number(n).toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+
+function fmtMoney(n) {
+    if (n == null || isNaN(n)) return "—";
+    if (Math.abs(n) >= 1e9) return "R$ " + fmt(n / 1e9, 1) + "B";
+    if (Math.abs(n) >= 1e6) return "R$ " + fmt(n / 1e6, 1) + "M";
+    if (Math.abs(n) >= 1e3) return "R$ " + fmt(n / 1e3, 1) + "K";
+    return "R$ " + fmt(n, 2);
+}
+
+function colorClass(val) {
+    if (val > 0) return "text-green";
+    if (val < 0) return "text-red";
+    return "";
+}
+
+function generateHourOptions() {
+    const opts = [];
+    for (let h = 9; h <= 18; h++) {
+        for (let m = 0; m < 60; m += 5) {
+            const hh = String(h).padStart(2, "0");
+            const mm = String(m).padStart(2, "0");
+            opts.push(`${hh}:${mm}`);
+        }
+    }
+    return opts;
+}
+
+function populateHourSelect(selectId, defaultVal) {
+    const sel = document.getElementById(selectId);
+    if (!sel || sel.options.length > 1) return;
+    sel.innerHTML = "";
+    generateHourOptions().forEach(h => {
+        const opt = document.createElement("option");
+        opt.value = h; opt.textContent = h;
+        if (h === defaultVal) opt.selected = true;
+        sel.appendChild(opt);
     });
 }
 
-function fmtCurrency(n) {
-    if (n == null || isNaN(n)) return '—';
-    return 'R$ ' + fmt(n);
+function populateSelect(selectId, items, valueKey, textKey) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    sel.innerHTML = "";
+    items.forEach(item => {
+        const opt = document.createElement("option");
+        opt.value = item[valueKey];
+        opt.textContent = item[textKey] || item[valueKey];
+        sel.appendChild(opt);
+    });
 }
 
-function fmtPct(n) {
-    if (n == null || isNaN(n)) return '—';
-    var sign = n >= 0 ? '+' : '';
-    return sign + fmt(n) + '%';
-}
-
-function destroyChart(id) {
-    if (APP.charts[id]) {
-        APP.charts[id].destroy();
-        delete APP.charts[id];
+// ─── DIRECTION BUTTONS ───
+window.setDirection = function (prefix, dir) {
+    document.getElementById(prefix + "-direction").value = dir;
+    const buyBtn = document.getElementById(prefix + "-dir-buy");
+    const sellBtn = document.getElementById(prefix + "-dir-sell");
+    if (dir === "compra") {
+        buyBtn.classList.add("active");
+        sellBtn.classList.remove("active");
+    } else {
+        sellBtn.classList.add("active");
+        buyBtn.classList.remove("active");
     }
+};
+
+// ─── CHARTS ───
+let charts = {};
+function destroyChart(id) {
+    if (charts[id]) { charts[id].destroy(); delete charts[id]; }
 }
 
-function showToast(msg, type) {
-    type = type || 'info';
-    var container = document.getElementById('toast-container');
-    if (!container) return;
-    var toast = document.createElement('div');
-    toast.className = 'alert alert-' + type + ' alert-dismissible fade show';
-    toast.role = 'alert';
-    toast.innerHTML = msg + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
-    container.appendChild(toast);
-    setTimeout(function() { toast.remove(); }, 5000);
+// ============================================================
+// DASHBOARD
+// ============================================================
+
+async function loadDashboard() {
+    const data = await API.get("/dashboard/summary");
+    if (!data) return;
+
+    const statsDiv = document.getElementById("dashboard-stats");
+    statsDiv.innerHTML = `
+        <div class="stat-card"><div class="value text-blue">${data.total_b3 || 0}</div><div class="label">Ativos B3</div></div>
+        <div class="stat-card"><div class="value text-purple">${data.total_bmf || 0}</div><div class="label">Ativos BMF</div></div>
+        <div class="stat-card"><div class="value text-green">${data.total_strategies || 0}</div><div class="label">Indicadores</div></div>
+        <div class="stat-card"><div class="value text-yellow">${data.total_daily_entry || 7}</div><div class="label">Entradas Daily</div></div>
+        <div class="stat-card"><div class="value text-yellow">${data.total_daily_exit || 3}</div><div class="label">Saídas Daily</div></div>
+        <div class="stat-card"><div class="value text-yellow">${data.total_intraday_entry || 12}</div><div class="label">Entradas Intra</div></div>
+    `;
+
+    // Quotes
+    const quotesDiv = document.getElementById("dashboard-quotes");
+    quotesDiv.innerHTML = "";
+    if (data.top_tickers && data.top_tickers.length > 0) {
+        data.top_tickers.forEach(t => {
+            const chg = t.change_pct || 0;
+            const cls = chg >= 0 ? "text-green" : "text-red";
+            const icon = chg >= 0 ? "fa-arrow-up" : "fa-arrow-down";
+            quotesDiv.innerHTML += `
+                <div class="col-6 col-md-3 col-lg-2">
+                    <div class="stat-card">
+                        <div class="label">${t.ticker || t.symbol || "?"}</div>
+                        <div class="value" style="font-size:1.1rem">${fmt(t.price)}</div>
+                        <div class="${cls}" style="font-size:0.8rem">
+                            <i class="fas ${icon}"></i> ${fmt(chg)}%
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+    } else {
+        quotesDiv.innerHTML = '<div class="col-12 text-secondary">Sem cotações disponíveis</div>';
+    }
+
+    // Chart
+    loadDashboardChart();
 }
 
-/* ═══════════════════════════════════════════
-   DASHBOARD
-   ═══════════════════════════════════════════ */
+async function loadDashboardChart() {
+    const data = await API.get("/market-data/PETR4?period=3mo&interval=1d");
+    if (!data || !data.data) return;
 
-async function renderDashboard() {
-    var content = document.getElementById('main-content');
-    content.innerHTML =
-        '<h2 class="mb-4"><i class="bi bi-speedometer2 me-2"></i>Dashboard</h2>' +
-        '<div id="dash-cards" class="row g-3 mb-4">' +
-            '<div class="col-12 text-center"><div class="spinner-border text-primary"></div><p class="mt-2">Carregando cotações...</p></div>' +
-        '</div>' +
-        '<div class="row g-3 mb-4">' +
-            '<div class="col-md-8"><div class="card shadow-sm">' +
-                '<div class="card-header"><h6 class="mb-0">PETR4 — Histórico (3 meses)</h6></div>' +
-                '<div class="card-body"><canvas id="chart-dash-main" height="300"></canvas></div>' +
-            '</div></div>' +
-            '<div class="col-md-4"><div class="card shadow-sm">' +
-                '<div class="card-header"><h6 class="mb-0">Resumo</h6></div>' +
-                '<div class="card-body" id="dash-summary">Carregando...</div>' +
-            '</div></div>' +
-        '</div>' +
-        '<div class="card shadow-sm">' +
-            '<div class="card-header"><h6 class="mb-0">Mercado</h6></div>' +
-            '<div class="card-body"><div class="table-responsive">' +
-                '<table class="table table-sm table-hover" id="dash-market-table">' +
-                '<thead><tr><th>Ticker</th><th>Nome</th><th class="text-end">Preço</th><th class="text-end">Variação</th><th class="text-end">Volume</th></tr></thead>' +
-                '<tbody></tbody></table></div></div>' +
-        '</div>';
+    destroyChart("chart-dashboard");
+    const ctx = document.getElementById("chart-dashboard");
+    if (!ctx) return;
 
-    // Busca cotações individualmente (plano free = 1 ticker/request)
-    var dashTickers = [
-        { label: 'IBOV',   brapi: '^BVSP' },
-        { label: 'Dólar',  brapi: 'USDBRL=X' },
-        { label: 'PETR4',  brapi: 'PETR4' },
-        { label: 'VALE3',  brapi: 'VALE3' },
-        { label: 'ITUB4',  brapi: 'ITUB4' },
-        { label: 'BBDC4',  brapi: 'BBDC4' },
-        { label: 'WEGE3',  brapi: 'WEGE3' },
-        { label: 'BOVA11', brapi: 'BOVA11' }
+    const labels = data.data.map(d => d.date ? d.date.substring(0, 10) : "");
+    const closes = data.data.map(d => d.close || d.Close || 0);
+
+    charts["chart-dashboard"] = new Chart(ctx, {
+        type: "line",
+        data: {
+            labels,
+            datasets: [{
+                label: "PETR4 Close",
+                data: closes,
+                borderColor: "#58a6ff",
+                backgroundColor: "rgba(88,166,255,0.1)",
+                fill: true, tension: 0.3, pointRadius: 0,
+            }],
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: "#e6edf3" } } },
+            scales: {
+                x: { ticks: { color: "#8b949e", maxTicksLimit: 10 }, grid: { color: "#30363d" } },
+                y: { ticks: { color: "#8b949e" }, grid: { color: "#30363d" } },
+            },
+        },
+    });
+}
+
+
+// ============================================================
+// STRATEGIES PAGE
+// ============================================================
+
+async function loadStrategiesPage() {
+    const data = await API.get("/strategies/all");
+    if (!data) return;
+    const div = document.getElementById("strategies-list");
+
+    let html = "";
+
+    const sections = [
+        { key: "indicator_strategies", title: "Indicadores Técnicos", color: "text-blue" },
+        { key: "daily_entry", title: "Entrada — Diário (Trade Certo)", color: "text-green" },
+        { key: "daily_exit", title: "Saída — Diário (Trade Certo)", color: "text-red" },
+        { key: "intraday_entry", title: "Entrada — Intraday (Trade Certo)", color: "text-yellow" },
+        { key: "intraday_exit", title: "Saída — Intraday (Trade Certo)", color: "text-purple" },
     ];
 
-    var quotes = [];
-    await Promise.all(dashTickers.map(async function(t) {
-        var q = await TradeAPI.brapiQuote(t.brapi);
-        if (q) quotes.push({ label: t.label, brapi: t.brapi, data: q });
-    }));
-
-    // Cards
-    var cardsDiv = document.getElementById('dash-cards');
-    if (!cardsDiv) return;
-    if (quotes.length === 0) {
-        cardsDiv.innerHTML = '<div class="col-12"><div class="alert alert-warning">Não foi possível carregar cotações.</div></div>';
-    } else {
-        cardsDiv.innerHTML = quotes.map(function(q) {
-            var d = q.data;
-            var change = d.regularMarketChange || 0;
-            var changePct = d.regularMarketChangePercent || 0;
-            var color = change >= 0 ? 'success' : 'danger';
-            var arrow = change >= 0 ? 'bi-arrow-up-short' : 'bi-arrow-down-short';
-            return '<div class="col-6 col-md-3">' +
-                '<div class="card shadow-sm border-' + color + ' border-start border-4"><div class="card-body py-2 px-3">' +
-                    '<div class="d-flex justify-content-between align-items-center">' +
-                        '<small class="text-muted fw-bold">' + q.label + '</small>' +
-                        '<i class="bi ' + arrow + ' text-' + color + ' fs-5"></i>' +
-                    '</div>' +
-                    '<div class="fs-5 fw-bold">' + fmt(d.regularMarketPrice) + '</div>' +
-                    '<small class="text-' + color + '">' + fmtPct(changePct) + '</small>' +
-                '</div></div></div>';
-        }).join('');
-    }
-
-    // Resumo
-    var summaryDiv = document.getElementById('dash-summary');
-    if (summaryDiv) {
-        var summaryData = await TradeAPI.get('/dashboard/summary');
-        if (summaryData) {
-            summaryDiv.innerHTML =
-                '<p><strong>Ativos B3:</strong> ' + summaryData.total_b3 + '</p>' +
-                '<p><strong>Ativos BMF:</strong> ' + summaryData.total_bmf + '</p>' +
-                '<p><strong>Estratégias:</strong> ' + summaryData.total_strategies + '</p>' +
-                '<hr><p class="text-muted small">Dados via brapi.dev (plano free: máx. 3 meses)</p>';
-        } else {
-            summaryDiv.innerHTML = '<p class="text-muted">Erro ao carregar resumo.</p>';
-        }
-    }
-
-    // Gráfico PETR4
-    var hist = await TradeAPI.brapiHistory('PETR4', '3mo', '1d');
-    destroyChart('chart-dash-main');
-    var canvas = document.getElementById('chart-dash-main');
-    if (canvas && hist && hist.length > 0) {
-        var labels = hist.map(function(h) {
-            return new Date(h.date * 1000).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    sections.forEach(sec => {
+        const items = data[sec.key];
+        if (!items || items.length === 0) return;
+        html += `<h5 class="${sec.color} mt-3">${sec.title} (${items.length})</h5>`;
+        html += '<div class="table-responsive"><table class="table table-dark table-sm"><thead><tr>';
+        html += '<th>ID</th><th>Nome</th><th>Descrição</th><th>Categoria</th></tr></thead><tbody>';
+        items.forEach(s => {
+            html += `<tr><td><code>${s.id}</code></td><td>${s.name}</td><td>${s.description}</td><td>${s.category}</td></tr>`;
         });
-        var prices = hist.map(function(h) { return h.close; });
-        APP.charts['chart-dash-main'] = new Chart(canvas, {
-            type: 'line',
+        html += '</tbody></table></div>';
+    });
+
+    div.innerHTML = html || "Nenhuma estratégia encontrada.";
+}
+
+
+// ============================================================
+// SAVED BACKTESTS
+// ============================================================
+
+async function loadSavedBacktests() {
+    const data = await API.get("/backtests/saved");
+    const div = document.getElementById("saved-list");
+
+    if (!data || !data.backtests || data.backtests.length === 0) {
+        div.innerHTML = "<p class='text-secondary'>Nenhum backtest salvo.</p>";
+        return;
+    }
+
+    let html = '<div class="table-responsive"><table class="table table-dark table-sm"><thead><tr>';
+    html += '<th>ID</th><th>Ticker</th><th>Estratégia</th><th>Resultado %</th><th>Data</th><th></th>';
+    html += '</tr></thead><tbody>';
+
+    data.backtests.forEach(bt => {
+        const res = bt.metrics ? bt.metrics.resultado_pct || bt.metrics.total_return_pct || 0 : 0;
+        html += `<tr>
+            <td><code>${bt.id || "?"}</code></td>
+            <td>${bt.ticker || "—"}</td>
+            <td>${bt.strategy_name || bt.entry_strategy_name || bt.strategy || "—"}</td>
+            <td class="${colorClass(res)}">${fmt(res)}%</td>
+            <td>${bt.saved_at ? bt.saved_at.substring(0, 10) : "—"}</td>
+            <td><button class="btn btn-sm btn-danger" onclick="deleteSaved('${bt.id}')"><i class="fas fa-trash"></i></button></td>
+        </tr>`;
+    });
+
+    html += '</tbody></table></div>';
+    div.innerHTML = html;
+}
+
+window.deleteSaved = async function (id) {
+    if (!confirm("Remover backtest salvo?")) return;
+    await API.del("/backtests/saved/" + id);
+    loadSavedBacktests();
+};
+
+
+// ============================================================
+// CONFIG
+// ============================================================
+
+async function loadStorageStats() {
+    const data = await API.get("/storage/stats");
+    const div = document.getElementById("cfg-storage-stats");
+    if (!data) { div.innerHTML = "Erro ao carregar."; return; }
+    div.innerHTML = `
+        <p>Total ativos: <strong>${data.total_assets || 0}</strong></p>
+        <p>Registros diários: <strong>${data.daily_assets || 0}</strong></p>
+        <p>Registros intraday: <strong>${data.intraday_assets || 0}</strong></p>
+        <p>Backtests salvos: <strong>${data.total_backtests || 0}</strong></p>
+        <p>Último update: <strong>${data.last_auto_update || "—"}</strong></p>
+    `;
+}
+
+window.verifyPin = async function () {
+    const pin = document.getElementById("cfg-pin").value;
+    const data = await API.post("/config/verify-pin", { pin });
+    const div = document.getElementById("cfg-pin-result");
+    if (data && data.valid) {
+        div.innerHTML = '<span class="text-green"><i class="fas fa-check"></i> PIN válido</span>';
+    } else {
+        div.innerHTML = '<span class="text-red"><i class="fas fa-times"></i> PIN inválido</span>';
+    }
+};
+
+window.changePin = async function () {
+    const old_pin = document.getElementById("cfg-old-pin").value;
+    const new_pin = document.getElementById("cfg-new-pin").value;
+    const data = await API.post("/config/change-pin", { old_pin, new_pin });
+    const div = document.getElementById("cfg-pin-change-result");
+    if (data && data.success) {
+        div.innerHTML = '<span class="text-green"><i class="fas fa-check"></i> PIN alterado</span>';
+    } else {
+        div.innerHTML = '<span class="text-red"><i class="fas fa-times"></i> Erro ao alterar PIN</span>';
+    }
+};
+
+window.downloadData = async function () {
+    const pin = document.getElementById("cfg-pin").value;
+    const ticker = document.getElementById("cfg-dl-ticker").value;
+    const div = document.getElementById("cfg-dl-result");
+    if (!pin || !ticker) { div.innerHTML = '<span class="text-red">Preencha PIN e Ticker</span>'; return; }
+    showSpinner();
+    const data = await API.post("/config/download-data", { pin, ticker, start_date: "", end_date: "", timeframe: "daily" });
+    hideSpinner();
+    if (data && data.success) {
+        div.innerHTML = `<span class="text-green"><i class="fas fa-check"></i> ${data.message || "Dados baixados"}</span>`;
+    } else {
+        div.innerHTML = `<span class="text-red"><i class="fas fa-times"></i> ${data ? data.message || "Erro" : "Erro"}</span>`;
+    }
+};
+
+// ============================================================
+// DAILY BACKTEST FORM
+// ============================================================
+
+let dailyStrategiesLoaded = false;
+
+async function initDailyForm() {
+    if (dailyStrategiesLoaded) return;
+
+    // Market toggle
+    document.getElementById("daily-market").addEventListener("change", function () {
+        document.getElementById("daily-tickers-wrap").style.display = this.value === "custom" ? "" : "none";
+    });
+
+    // Load entry strategies
+    const entryData = await API.get("/strategies/daily/entry");
+    if (entryData && entryData.strategies) {
+        populateSelect("daily-entry-strategy", entryData.strategies, "id", "name");
+    }
+
+    // Load exit strategies
+    const exitData = await API.get("/strategies/daily/exit");
+    if (exitData && exitData.strategies) {
+        populateSelect("daily-exit-strategy", exitData.strategies, "id", "name");
+    }
+
+    dailyStrategiesLoaded = true;
+}
+
+window.runDailyBacktest = async function () {
+    const market = document.getElementById("daily-market").value;
+    const customTickers = document.getElementById("daily-tickers").value.trim();
+    const direction = document.getElementById("daily-direction").value;
+    const entryStrat = document.getElementById("daily-entry-strategy").value;
+    const exitStrat = document.getElementById("daily-exit-strategy").value;
+    const variation = parseFloat(document.getElementById("daily-variation").value) || 0;
+    const period = document.getElementById("daily-period").value;
+    const capital = parseFloat(document.getElementById("daily-capital").value) || 10000;
+    const startDate = document.getElementById("daily-start-date").value || null;
+    const endDate = document.getElementById("daily-end-date").value || null;
+
+    const body = {
+        entry_strategy: entryStrat,
+        exit_strategy: exitStrat,
+        direction,
+        variation_pct: variation,
+        period,
+        initial_capital: capital,
+        start_date: startDate,
+        end_date: endDate,
+    };
+
+    if (market === "custom" && customTickers) {
+        body.tickers = customTickers.split(",").map(t => t.trim().toUpperCase()).filter(Boolean);
+    } else {
+        body.market = "b3";
+    }
+
+    showSpinner();
+    const data = await API.post("/backtest/daily", body);
+    hideSpinner();
+
+    if (!data) { alert("Erro ao executar backtest"); return; }
+
+    displayDailyResults(data);
+};
+
+function displayDailyResults(data) {
+    const card = document.getElementById("daily-results-card");
+    const tbody = document.querySelector("#daily-results-table tbody");
+    card.style.display = "";
+    tbody.innerHTML = "";
+
+    // Se veio resultado único (ticker), converte em array
+    let results = data.results || [];
+    if (results.length === 0 && data.metrics) {
+        results = [{
+            acao: data.ticker,
+            total_gain: data.metrics.total_gain,
+            pct_gain: data.metrics.pct_gain,
+            total_loss: data.metrics.total_loss,
+            pct_loss: data.metrics.pct_loss,
+            total_trades: data.metrics.total_trades,
+            resultado_pct: data.metrics.resultado_pct,
+            max_drawdown_pct: data.metrics.max_drawdown_pct,
+            ganho_maximo_pct: data.metrics.ganho_maximo_pct,
+            ganho_medio_pct: data.metrics.ganho_medio_pct,
+            volume_medio: data.metrics.volume_medio,
+        }];
+    }
+
+    results.forEach(r => {
+        const res = r.resultado_pct || 0;
+        tbody.innerHTML += `<tr>
+            <td><strong>${r.acao}</strong></td>
+            <td>${r.total_gain}</td>
+            <td>${fmt(r.pct_gain)}%</td>
+            <td>${r.total_loss}</td>
+            <td>${fmt(r.pct_loss)}%</td>
+            <td>${r.total_trades}</td>
+            <td class="${colorClass(res)}"><strong>${fmt(res)}%</strong></td>
+            <td class="text-red">${fmt(r.max_drawdown_pct)}%</td>
+            <td class="text-green">${fmt(r.ganho_maximo_pct)}%</td>
+            <td>${fmt(r.ganho_medio_pct, 4)}%</td>
+            <td>${fmtMoney(r.volume_medio)}</td>
+        </tr>`;
+    });
+}
+
+
+// ============================================================
+// INDICATOR BACKTEST
+// ============================================================
+
+let indStratsLoaded = false;
+
+async function initIndicatorForm() {
+    if (indStratsLoaded) return;
+    const data = await API.get("/strategies");
+    if (data && data.strategies) {
+        populateSelect("ind-strategy", data.strategies, "id", "name");
+    }
+    indStratsLoaded = true;
+}
+
+window.runIndicatorBacktest = async function () {
+    const ticker = document.getElementById("ind-ticker").value.trim().toUpperCase();
+    const strategy = document.getElementById("ind-strategy").value;
+    const period = document.getElementById("ind-period").value;
+    const interval = document.getElementById("ind-interval").value;
+    const capital = parseFloat(document.getElementById("ind-capital").value) || 10000;
+
+    if (!ticker || !strategy) { alert("Preencha todos os campos"); return; }
+
+    showSpinner();
+    const url = `/backtest?ticker=${ticker}&strategy=${strategy}&period=${period}&interval=${interval}&capital=${capital}`;
+    const data = await API.get(url);
+    hideSpinner();
+
+    if (!data || !data.metrics) { alert("Sem resultado"); return; }
+
+    const card = document.getElementById("ind-results-card");
+    card.style.display = "";
+
+    const m = data.metrics;
+    const statsDiv = document.getElementById("ind-stats");
+    statsDiv.innerHTML = `
+        <div class="stat-card"><div class="value ${colorClass(m.resultado_pct)}">${fmt(m.resultado_pct)}%</div><div class="label">Resultado</div></div>
+        <div class="stat-card"><div class="value">${m.total_trades}</div><div class="label">Total Trades</div></div>
+        <div class="stat-card"><div class="value text-green">${fmt(m.win_rate)}%</div><div class="label">Win Rate</div></div>
+        <div class="stat-card"><div class="value text-red">${fmt(m.max_drawdown_pct)}%</div><div class="label">Max DrawDown</div></div>
+        <div class="stat-card"><div class="value">${fmt(m.profit_factor)}</div><div class="label">Profit Factor</div></div>
+        <div class="stat-card"><div class="value">${fmt(m.sharpe_ratio)}</div><div class="label">Sharpe</div></div>
+    `;
+
+    // Equity curve chart
+    if (m.equity_curve && m.equity_curve.length > 0) {
+        destroyChart("chart-indicator");
+        const ctx = document.getElementById("chart-indicator");
+        charts["chart-indicator"] = new Chart(ctx, {
+            type: "line",
             data: {
-                labels: labels,
+                labels: m.equity_curve.map((_, i) => i),
                 datasets: [{
-                    label: 'PETR4 (Fechamento)', data: prices,
-                    borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.1)',
-                    fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2
-                }]
+                    label: "Equity",
+                    data: m.equity_curve,
+                    borderColor: m.equity_curve[m.equity_curve.length - 1] >= m.equity_curve[0] ? "#3fb950" : "#f85149",
+                    backgroundColor: "rgba(88,166,255,0.05)",
+                    fill: true, tension: 0.3, pointRadius: 0,
+                }],
             },
             options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
+                responsive: true,
+                plugins: { legend: { labels: { color: "#e6edf3" } } },
                 scales: {
-                    x: { ticks: { maxTicksAutoSkip: true, maxRotation: 0 } },
-                    y: { ticks: { callback: function(v) { return 'R$ ' + v; } } }
-                }
-            }
-        });
-    }
-
-    // Tabela de mercado
-    var tbody = document.querySelector('#dash-market-table tbody');
-    if (tbody && quotes.length > 0) {
-        tbody.innerHTML = quotes.map(function(q) {
-            var d = q.data;
-            var color = (d.regularMarketChange || 0) >= 0 ? 'text-success' : 'text-danger';
-            var vol = d.regularMarketVolume ? Number(d.regularMarketVolume).toLocaleString('pt-BR') : '—';
-            return '<tr><td class="fw-bold">' + q.label + '</td>' +
-                '<td>' + (d.longName || d.shortName || '—') + '</td>' +
-                '<td class="text-end">' + fmt(d.regularMarketPrice) + '</td>' +
-                '<td class="text-end ' + color + '">' + fmtPct(d.regularMarketChangePercent) + '</td>' +
-                '<td class="text-end">' + vol + '</td></tr>';
-        }).join('');
-    }
-}
-
-/* ═══════════════════════════════════════════
-   SHARED LOADERS
-   ═══════════════════════════════════════════ */
-
-async function loadStrategies(selectId) {
-    var sel = document.getElementById(selectId);
-    if (!sel) return;
-    sel.innerHTML = '<option value="">Carregando...</option>';
-    var data = await TradeAPI.get('/strategies');
-    if (!data || !data.strategies || data.strategies.length === 0) {
-        sel.innerHTML = '<option value="">Nenhuma estratégia</option>';
-        return;
-    }
-    sel.innerHTML = '<option value="">Selecione...</option>';
-    data.strategies.forEach(function(s) {
-        var opt = document.createElement('option');
-        opt.value = s.id;
-        opt.textContent = s.name + ' (' + s.category + ')';
-        sel.appendChild(opt);
-    });
-}
-
-async function loadTickers(selectId, market) {
-    market = market || 'b3';
-    var sel = document.getElementById(selectId);
-    if (!sel) return;
-    sel.innerHTML = '<option value="">Carregando...</option>';
-    var data = await TradeAPI.get('/assets?market=' + market);
-    if (!data) { sel.innerHTML = '<option value="">Erro</option>'; return; }
-    sel.innerHTML = '<option value="">Selecione...</option>';
-    var list = data.b3 || data.bmf || [];
-    list.forEach(function(a) {
-        var opt = document.createElement('option');
-        opt.value = a.ticker;
-        opt.textContent = a.ticker;
-        sel.appendChild(opt);
-    });
-}
-
-/* ═══════════════════════════════════════════
-   BACKTEST — SINGLE
-   ═══════════════════════════════════════════ */
-
-async function renderBacktest() {
-    var content = document.getElementById('main-content');
-    content.innerHTML =
-        '<h2 class="mb-4"><i class="bi bi-graph-up me-2"></i>Backtest Individual</h2>' +
-        '<div class="card shadow-sm mb-4"><div class="card-body"><div class="row g-3">' +
-            '<div class="col-md-3"><label class="form-label">Ativo</label><select id="bt-ticker" class="form-select"></select></div>' +
-            '<div class="col-md-3"><label class="form-label">Estratégia</label><select id="bt-strategy" class="form-select"></select></div>' +
-            '<div class="col-md-2"><label class="form-label">Período</label><select id="bt-period" class="form-select">' +
-                '<option value="3mo">3 meses</option><option value="6mo">6 meses</option><option value="1y" selected>1 ano</option><option value="2y">2 anos</option>' +
-            '</select></div>' +
-            '<div class="col-md-2"><label class="form-label">Capital</label><input type="number" id="bt-capital" class="form-control" value="10000" min="100"></div>' +
-            '<div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100" onclick="runBacktest()"><i class="bi bi-play-fill me-1"></i>Executar</button></div>' +
-        '</div></div></div><div id="bt-result"></div>';
-
-    await Promise.all([loadTickers('bt-ticker', 'b3'), loadStrategies('bt-strategy')]);
-}
-
-async function runBacktest() {
-    var ticker = document.getElementById('bt-ticker').value;
-    var strategy = document.getElementById('bt-strategy').value;
-    var period = document.getElementById('bt-period').value;
-    var capital = document.getElementById('bt-capital').value;
-    if (!ticker || !strategy) { showToast('Selecione ativo e estratégia', 'warning'); return; }
-
-    var resultDiv = document.getElementById('bt-result');
-    resultDiv.innerHTML = '<div class="text-center my-4"><div class="spinner-border text-primary"></div><p class="mt-2">Executando backtest...</p></div>';
-
-    var data = await TradeAPI.get('/backtest?ticker=' + ticker + '&strategy=' + strategy + '&period=' + period + '&interval=1d&capital=' + capital);
-    if (!data || !data.metrics) {
-        resultDiv.innerHTML = '<div class="alert alert-danger">Erro ao executar backtest. Verifique se há dados suficientes.</div>';
-        return;
-    }
-
-    var m = data.metrics;
-    var rc = m.total_return_pct >= 0 ? 'success' : 'danger';
-
-    resultDiv.innerHTML =
-        '<div class="row g-3 mb-4">' +
-            '<div class="col-md-3"><div class="card shadow-sm"><div class="card-body text-center">' +
-                '<small class="text-muted">Retorno Total</small><div class="fs-4 fw-bold text-' + rc + '">' + fmtPct(m.total_return_pct) + '</div><small>' + fmtCurrency(m.total_return) + '</small></div></div></div>' +
-            '<div class="col-md-3"><div class="card shadow-sm"><div class="card-body text-center">' +
-                '<small class="text-muted">Win Rate</small><div class="fs-4 fw-bold">' + fmt(m.win_rate) + '%</div><small>' + m.winning_trades + 'W / ' + m.losing_trades + 'L</small></div></div></div>' +
-            '<div class="col-md-3"><div class="card shadow-sm"><div class="card-body text-center">' +
-                '<small class="text-muted">Profit Factor</small><div class="fs-4 fw-bold">' + fmt(m.profit_factor) + '</div><small>Sharpe: ' + fmt(m.sharpe_ratio) + '</small></div></div></div>' +
-            '<div class="col-md-3"><div class="card shadow-sm"><div class="card-body text-center">' +
-                '<small class="text-muted">Max Drawdown</small><div class="fs-4 fw-bold text-danger">-' + fmt(m.max_drawdown_pct) + '%</div><small>' + fmtCurrency(m.max_drawdown) + '</small></div></div></div>' +
-        '</div>' +
-        '<div class="row g-3 mb-4">' +
-            '<div class="col-md-8"><div class="card shadow-sm"><div class="card-header"><h6 class="mb-0">Curva de Capital</h6></div>' +
-                '<div class="card-body"><canvas id="chart-equity" height="280"></canvas></div></div></div>' +
-            '<div class="col-md-4"><div class="card shadow-sm"><div class="card-header"><h6 class="mb-0">Detalhes</h6></div><div class="card-body">' +
-                '<p><strong>Ativo:</strong> ' + data.ticker + '</p>' +
-                '<p><strong>Estratégia:</strong> ' + (data.strategy_name || data.strategy_id) + '</p>' +
-                '<p><strong>Período:</strong> ' + data.period + ' | ' + data.data_points + ' candles</p>' +
-                '<p><strong>Capital Inicial:</strong> ' + fmtCurrency(m.initial_capital) + '</p>' +
-                '<p><strong>Capital Final:</strong> ' + fmtCurrency(m.final_equity) + '</p>' +
-                '<p><strong>Total Trades:</strong> ' + m.total_trades + '</p>' +
-                '<hr><button class="btn btn-sm btn-outline-primary" onclick="saveBacktest()" id="btn-save-bt"><i class="bi bi-save me-1"></i>Salvar</button>' +
-            '</div></div></div>' +
-        '</div>' +
-        '<div class="card shadow-sm"><div class="card-header"><h6 class="mb-0">Últimas Operações</h6></div>' +
-            '<div class="card-body"><div class="table-responsive"><table class="table table-sm table-hover">' +
-            '<thead><tr><th>Entrada</th><th>Saída</th><th>Preço E.</th><th>Preço S.</th><th>Qtd</th><th>Lucro</th><th>%</th></tr></thead>' +
-            '<tbody>' + (data.trades || []).map(function(t) {
-                var c = t.profit >= 0 ? 'text-success' : 'text-danger';
-                return '<tr><td>' + t.entry_date + '</td><td>' + t.exit_date + '</td><td>' + fmt(t.entry_price) + '</td><td>' + fmt(t.exit_price) + '</td><td>' + t.shares + '</td><td class="' + c + '">' + fmtCurrency(t.profit) + '</td><td class="' + c + '">' + fmtPct(t.return_pct) + '</td></tr>';
-            }).join('') + '</tbody></table></div></div></div>';
-
-    APP._lastBacktest = data;
-
-    if (data.equity_curve && data.equity_curve.length > 0) {
-        destroyChart('chart-equity');
-        var eCanvas = document.getElementById('chart-equity');
-        if (eCanvas) {
-            var eColor = m.total_return_pct >= 0 ? '#198754' : '#dc3545';
-            var eBg = m.total_return_pct >= 0 ? 'rgba(25,135,84,0.1)' : 'rgba(220,53,69,0.1)';
-            APP.charts['chart-equity'] = new Chart(eCanvas, {
-                type: 'line',
-                data: {
-                    labels: data.equity_curve.map(function(e) { return e.date; }),
-                    datasets: [{
-                        label: 'Capital', data: data.equity_curve.map(function(e) { return e.equity; }),
-                        borderColor: eColor, backgroundColor: eBg,
-                        fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2
-                    }]
+                    x: { display: false },
+                    y: { ticks: { color: "#8b949e" }, grid: { color: "#30363d" } },
                 },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { ticks: { maxTicksAutoSkip: true, maxRotation: 0 } },
-                        y: { ticks: { callback: function(v) { return 'R$ ' + Number(v).toLocaleString('pt-BR'); } } }
-                    }
-                }
-            });
-        }
-    }
-}
-
-async function saveBacktest() {
-    if (!APP._lastBacktest) return;
-    var btn = document.getElementById('btn-save-bt');
-    if (btn) btn.disabled = true;
-    var resp = await TradeAPI.post('/backtests/save', { result: APP._lastBacktest });
-    if (resp && resp.success) showToast('Backtest salvo!', 'success');
-    else showToast('Erro ao salvar', 'danger');
-    if (btn) btn.disabled = false;
-}
-
-/* ═══════════════════════════════════════════
-   BACKTEST — BULK
-   ═══════════════════════════════════════════ */
-
-async function renderBulk() {
-    var content = document.getElementById('main-content');
-    content.innerHTML =
-        '<h2 class="mb-4"><i class="bi bi-collection me-2"></i>Backtest em Massa</h2>' +
-        '<div class="card shadow-sm mb-4"><div class="card-body"><div class="row g-3">' +
-            '<div class="col-md-3"><label class="form-label">Mercado</label><select id="bulk-market" class="form-select"><option value="b3">B3</option><option value="bmf">BMF</option></select></div>' +
-            '<div class="col-md-3"><label class="form-label">Estratégia</label><select id="bulk-strategy" class="form-select"></select></div>' +
-            '<div class="col-md-2"><label class="form-label">Período</label><select id="bulk-period" class="form-select"><option value="3mo">3 meses</option><option value="6mo">6 meses</option><option value="1y" selected>1 ano</option></select></div>' +
-            '<div class="col-md-2"><label class="form-label">Capital</label><input type="number" id="bulk-capital" class="form-control" value="10000"></div>' +
-            '<div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100" onclick="runBulk()"><i class="bi bi-play-fill me-1"></i>Executar</button></div>' +
-        '</div></div></div><div id="bulk-result"></div>';
-    await loadStrategies('bulk-strategy');
-}
-
-async function runBulk() {
-    var market = document.getElementById('bulk-market').value;
-    var strategy = document.getElementById('bulk-strategy').value;
-    var period = document.getElementById('bulk-period').value;
-    var capital = document.getElementById('bulk-capital').value;
-    if (!strategy) { showToast('Selecione uma estratégia', 'warning'); return; }
-
-    var rd = document.getElementById('bulk-result');
-    rd.innerHTML = '<div class="text-center my-4"><div class="spinner-border text-primary"></div><p class="mt-2">Executando... (pode demorar)</p></div>';
-
-    var data = await TradeAPI.get('/backtest/bulk?market=' + market + '&strategy=' + strategy + '&period=' + period + '&interval=1d&capital=' + capital);
-    if (!data || !data.results) { rd.innerHTML = '<div class="alert alert-danger">Erro ao executar.</div>'; return; }
-
-    rd.innerHTML =
-        '<div class="alert alert-info">' + data.total_tested + ' ativos testados</div>' +
-        '<div class="card shadow-sm"><div class="card-body"><div class="table-responsive"><table class="table table-sm table-hover table-striped">' +
-        '<thead><tr><th>Ativo</th><th>Retorno %</th><th>Win Rate</th><th>Trades</th><th>PF</th><th>Max DD%</th><th>Sharpe</th><th>Capital Final</th></tr></thead>' +
-        '<tbody>' + data.results.map(function(r) {
-            var c = r.total_return_pct >= 0 ? 'text-success' : 'text-danger';
-            return '<tr><td class="fw-bold">' + r.ticker + '</td><td class="' + c + '">' + fmtPct(r.total_return_pct) + '</td><td>' + fmt(r.win_rate) + '%</td><td>' + r.total_trades + '</td><td>' + fmt(r.profit_factor) + '</td><td class="text-danger">-' + fmt(r.max_drawdown_pct) + '%</td><td>' + fmt(r.sharpe_ratio) + '</td><td>' + fmtCurrency(r.final_equity) + '</td></tr>';
-        }).join('') + '</tbody></table></div></div></div>';
-}
-
-/* ═══════════════════════════════════════════
-   BACKTEST — COMPARE
-   ═══════════════════════════════════════════ */
-
-async function renderCompare() {
-    var content = document.getElementById('main-content');
-    content.innerHTML =
-        '<h2 class="mb-4"><i class="bi bi-bar-chart me-2"></i>Comparar Estratégias</h2>' +
-        '<div class="card shadow-sm mb-4"><div class="card-body"><div class="row g-3">' +
-            '<div class="col-md-4"><label class="form-label">Ativo</label><select id="cmp-ticker" class="form-select"></select></div>' +
-            '<div class="col-md-3"><label class="form-label">Período</label><select id="cmp-period" class="form-select"><option value="3mo">3 meses</option><option value="6mo">6 meses</option><option value="1y" selected>1 ano</option></select></div>' +
-            '<div class="col-md-3"><label class="form-label">Capital</label><input type="number" id="cmp-capital" class="form-control" value="10000"></div>' +
-            '<div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100" onclick="runCompare()"><i class="bi bi-play-fill me-1"></i>Comparar</button></div>' +
-        '</div></div></div><div id="cmp-result"></div>';
-    await loadTickers('cmp-ticker', 'b3');
-}
-
-async function runCompare() {
-    var ticker = document.getElementById('cmp-ticker').value;
-    var period = document.getElementById('cmp-period').value;
-    var capital = document.getElementById('cmp-capital').value;
-    if (!ticker) { showToast('Selecione um ativo', 'warning'); return; }
-
-    var rd = document.getElementById('cmp-result');
-    rd.innerHTML = '<div class="text-center my-4"><div class="spinner-border text-primary"></div><p class="mt-2">Comparando...</p></div>';
-
-    var data = await TradeAPI.get('/backtest/compare?ticker=' + ticker + '&period=' + period + '&interval=1d&capital=' + capital);
-    if (!data || !data.results) { rd.innerHTML = '<div class="alert alert-danger">Erro ao comparar.</div>'; return; }
-
-    rd.innerHTML =
-        '<div class="alert alert-info">' + data.total_strategies + ' estratégias testadas com ' + ticker + '</div>' +
-        '<div class="row g-3 mb-4">' +
-            '<div class="col-md-8"><div class="card shadow-sm"><div class="card-header"><h6 class="mb-0">Retorno por Estratégia</h6></div>' +
-                '<div class="card-body"><canvas id="chart-compare" height="300"></canvas></div></div></div>' +
-            '<div class="col-md-4"><div class="card shadow-sm"><div class="card-header"><h6 class="mb-0">Ranking</h6></div>' +
-                '<div class="card-body"><div class="table-responsive"><table class="table table-sm">' +
-                '<thead><tr><th>#</th><th>Estratégia</th><th>Retorno</th></tr></thead>' +
-                '<tbody>' + data.results.map(function(r, i) {
-                    var met = r.metrics || {};
-                    var c = (met.total_return_pct || 0) >= 0 ? 'text-success' : 'text-danger';
-                    return '<tr><td>' + (i+1) + '</td><td>' + (r.strategy_name || r.strategy_id) + '</td><td class="' + c + '">' + fmtPct(met.total_return_pct) + '</td></tr>';
-                }).join('') + '</tbody></table></div></div></div>' +
-        '</div>';
-
-    destroyChart('chart-compare');
-    var cc = document.getElementById('chart-compare');
-    if (cc && data.results.length > 0) {
-        var cLabels = data.results.map(function(r) { return r.strategy_name || r.strategy_id; });
-        var cValues = data.results.map(function(r) { return (r.metrics || {}).total_return_pct || 0; });
-        var cColors = cValues.map(function(v) { return v >= 0 ? '#198754' : '#dc3545'; });
-        APP.charts['chart-compare'] = new Chart(cc, {
-            type: 'bar',
-            data: { labels: cLabels, datasets: [{ label: 'Retorno %', data: cValues, backgroundColor: cColors }] },
-            options: {
-                responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-                plugins: { legend: { display: false } },
-                scales: { x: { ticks: { callback: function(v) { return v + '%'; } } } }
-            }
+            },
         });
     }
-}
+};
 
-/* ═══════════════════════════════════════════
-   STRATEGIES
-   ═══════════════════════════════════════════ */
+// ============================================================
+// INTRADAY BACKTEST FORM
+// ============================================================
 
-async function renderStrategies() {
-    var content = document.getElementById('main-content');
-    content.innerHTML = '<h2 class="mb-4"><i class="bi bi-lightbulb me-2"></i>Estratégias</h2><div id="strats-list"><div class="text-center my-4"><div class="spinner-border text-primary"></div></div></div>';
+let intraStratsLoaded = { b3: false, bmf: false };
 
-    var data = await TradeAPI.get('/strategies');
-    var ld = document.getElementById('strats-list');
-    if (!data || !data.strategies || data.strategies.length === 0) {
-        ld.innerHTML = '<div class="alert alert-warning">Nenhuma estratégia encontrada.</div>';
-        return;
+async function initIntradayForm(marketType) {
+    const prefix = "intra-" + marketType;
+
+    // Market toggle
+    const marketSel = document.getElementById(prefix + "-market");
+    if (marketSel) {
+        marketSel.onchange = function () {
+            const wrap = document.getElementById(prefix + "-tickers-wrap");
+            if (wrap) wrap.style.display = this.value === "custom" ? "" : "none";
+        };
     }
 
-    var groups = {};
-    data.strategies.forEach(function(s) {
-        if (!groups[s.category]) groups[s.category] = [];
-        groups[s.category].push(s);
+    if (intraStratsLoaded[marketType]) return;
+
+    // Populate hour selects
+    populateHourSelect(prefix + "-hour-start", "09:00");
+    populateHourSelect(prefix + "-hour-end", "17:00");
+    populateHourSelect(prefix + "-hour-target", "15:00");
+
+    // Load entry strategies
+    const entryData = await API.get("/strategies/intraday/entry");
+    if (entryData && entryData.strategies) {
+        populateSelect(prefix + "-entry-strategy", entryData.strategies, "id", "name");
+    }
+
+    // Load exit strategies
+    const exitData = await API.get("/strategies/intraday/exit");
+    if (exitData && exitData.strategies) {
+        populateSelect(prefix + "-exit-strategy", exitData.strategies, "id", "name");
+    }
+
+    intraStratsLoaded[marketType] = true;
+}
+
+window.runIntradayBacktest = async function (marketType) {
+    const prefix = "intra-" + marketType;
+    const marketSel = document.getElementById(prefix + "-market").value;
+    const customTickers = document.getElementById(prefix + "-tickers") ?
+        document.getElementById(prefix + "-tickers").value.trim() : "";
+
+    const direction = document.getElementById(prefix + "-direction").value;
+    const entryStrat = document.getElementById(prefix + "-entry-strategy").value;
+    const exitStrat = document.getElementById(prefix + "-exit-strategy").value;
+    const variation = parseFloat(document.getElementById(prefix + "-variation").value) || 0;
+    const hourStart = document.getElementById(prefix + "-hour-start").value;
+    const hourEnd = document.getElementById(prefix + "-hour-end").value;
+    const hourTarget = document.getElementById(prefix + "-hour-target").value;
+    const targetPct = document.getElementById(prefix + "-target-pct").value ?
+        parseFloat(document.getElementById(prefix + "-target-pct").value) : null;
+    const stopPct = document.getElementById(prefix + "-stop-pct").value ?
+        parseFloat(document.getElementById(prefix + "-stop-pct").value) : null;
+    const maxTrades = parseInt(document.getElementById(prefix + "-max-trades").value) || 99;
+    const closeEod = document.getElementById(prefix + "-close-eod").checked;
+    const bbWindow = parseInt(document.getElementById(prefix + "-bb-window").value) || 20;
+    const bbStd = parseFloat(document.getElementById(prefix + "-bb-std").value) || 2.0;
+    const maPeriod = parseInt(document.getElementById(prefix + "-ma-period").value) || 20;
+    const period = document.getElementById(prefix + "-period").value;
+    const startDate = document.getElementById(prefix + "-start-date").value || null;
+    const endDate = document.getElementById(prefix + "-end-date").value || null;
+    const capital = parseFloat(document.getElementById(prefix + "-capital").value) || 10000;
+
+    const body = {
+        entry_strategy: entryStrat,
+        exit_strategy: exitStrat,
+        direction,
+        variation_pct: variation,
+        hour_start: hourStart,
+        hour_end: hourEnd,
+        hour_target: hourTarget,
+        target_pct: targetPct,
+        stop_loss_pct: stopPct,
+        close_eod: closeEod,
+        max_trades_per_day: maxTrades,
+        bb_window: bbWindow,
+        bb_std: bbStd,
+        ma_period: maPeriod,
+        period,
+        initial_capital: capital,
+        start_date: startDate,
+        end_date: endDate,
+    };
+
+    if (marketSel === "custom" && customTickers) {
+        body.tickers = customTickers.split(",").map(t => t.trim().toUpperCase()).filter(Boolean);
+    } else {
+        body.market = marketType;
+    }
+
+    showSpinner();
+    const data = await API.post("/backtest/intraday", body);
+    hideSpinner();
+
+    if (!data) { alert("Erro ao executar backtest intraday"); return; }
+
+    displayIntradayResults(data, prefix);
+};
+
+function displayIntradayResults(data, prefix) {
+    const card = document.getElementById(prefix + "-results-card");
+    const tbody = document.querySelector("#" + prefix + "-results-table tbody");
+    card.style.display = "";
+    tbody.innerHTML = "";
+
+    let results = data.results || [];
+    if (results.length === 0 && data.metrics) {
+        results = [{
+            acao: data.ticker,
+            total_gain: data.metrics.total_gain,
+            pct_gain: data.metrics.pct_gain,
+            total_loss: data.metrics.total_loss,
+            pct_loss: data.metrics.pct_loss,
+            total_trades: data.metrics.total_trades,
+            resultado_pct: data.metrics.resultado_pct,
+            max_drawdown_pct: data.metrics.max_drawdown_pct,
+            ganho_maximo_pct: data.metrics.ganho_maximo_pct,
+            ganho_medio_pct: data.metrics.ganho_medio_pct,
+            volume_medio: data.metrics.volume_medio,
+        }];
+    }
+
+    results.forEach(r => {
+        const res = r.resultado_pct || 0;
+        tbody.innerHTML += `<tr>
+            <td><strong>${r.acao}</strong></td>
+            <td>${r.total_gain}</td>
+            <td>${fmt(r.pct_gain)}%</td>
+            <td>${r.total_loss}</td>
+            <td>${fmt(r.pct_loss)}%</td>
+            <td>${r.total_trades}</td>
+            <td class="${colorClass(res)}"><strong>${fmt(res)}%</strong></td>
+            <td class="text-red">${fmt(r.max_drawdown_pct)}%</td>
+            <td class="text-green">${fmt(r.ganho_maximo_pct)}%</td>
+            <td>${fmt(r.ganho_medio_pct, 4)}%</td>
+            <td>${fmtMoney(r.volume_medio)}</td>
+        </tr>`;
     });
-
-    var html = '';
-    for (var cat in groups) {
-        html += '<h5 class="mt-4 mb-3"><span class="badge bg-secondary">' + cat + '</span></h5><div class="row g-3">';
-        groups[cat].forEach(function(s) {
-            html += '<div class="col-md-4"><div class="card shadow-sm h-100"><div class="card-body">' +
-                '<h6 class="card-title">' + s.name + '</h6>' +
-                '<p class="card-text text-muted small">' + s.description + '</p>' +
-                '<code class="small">' + s.id + '</code></div></div></div>';
-        });
-        html += '</div>';
-    }
-    ld.innerHTML = html;
 }
 
-/* ═══════════════════════════════════════════
-   SAVED BACKTESTS
-   ═══════════════════════════════════════════ */
 
-async function renderSaved() {
-    var content = document.getElementById('main-content');
-    content.innerHTML = '<h2 class="mb-4"><i class="bi bi-bookmark me-2"></i>Backtests Salvos</h2><div id="saved-list"><div class="text-center my-4"><div class="spinner-border text-primary"></div></div></div>';
+// ============================================================
+// INIT
+// ============================================================
 
-    var data = await TradeAPI.get('/backtests/saved');
-    var list = (data && data.backtests) || [];
-    var ld = document.getElementById('saved-list');
+navigate("dashboard");
 
-    if (list.length === 0) {
-        ld.innerHTML = '<div class="alert alert-info">Nenhum backtest salvo ainda.</div>';
-        return;
-    }
-
-    ld.innerHTML =
-        '<div class="card shadow-sm"><div class="card-body"><div class="table-responsive"><table class="table table-sm table-hover">' +
-        '<thead><tr><th>ID</th><th>Ativo</th><th>Estratégia</th><th>Retorno</th><th>Data</th><th></th></tr></thead>' +
-        '<tbody>' + list.map(function(bt) {
-            var c = bt.total_return_pct >= 0 ? 'text-success' : 'text-danger';
-            return '<tr><td><code>' + bt.id + '</code></td><td class="fw-bold">' + bt.ticker + '</td><td>' + bt.strategy + '</td><td class="' + c + '">' + fmtPct(bt.total_return_pct) + '</td><td>' + new Date(bt.saved_at).toLocaleDateString('pt-BR') + '</td><td><button class="btn btn-sm btn-outline-danger" onclick="deleteSavedBt(\'' + bt.id + '\')"><i class="bi bi-trash"></i></button></td></tr>';
-        }).join('') + '</tbody></table></div></div></div>';
-}
-
-async function deleteSavedBt(id) {
-    if (!confirm('Remover backtest salvo?')) return;
-    await TradeAPI.del('/backtests/saved/' + id);
-    renderSaved();
-}
-
-/* ═══════════════════════════════════════════
-   CONFIG
-   ═══════════════════════════════════════════ */
-
-async function renderConfig() {
-    var content = document.getElementById('main-content');
-
-    if (!APP.pin) {
-        content.innerHTML =
-            '<h2 class="mb-4"><i class="bi bi-gear me-2"></i>Configurações</h2>' +
-            '<div class="card shadow-sm" style="max-width:400px;"><div class="card-body">' +
-                '<h5>Autenticação</h5><p class="text-muted">Digite o PIN para acessar.</p>' +
-                '<div class="mb-3"><input type="password" id="cfg-pin" class="form-control" placeholder="PIN" maxlength="10"></div>' +
-                '<button class="btn btn-primary" onclick="verifyPin()">Entrar</button>' +
-                '<div id="pin-error" class="text-danger mt-2" style="display:none;"></div>' +
-            '</div></div>';
-        return;
-    }
-
-    content.innerHTML =
-        '<h2 class="mb-4"><i class="bi bi-gear me-2"></i>Configurações</h2>' +
-        '<div class="row g-4">' +
-            '<div class="col-md-6"><div class="card shadow-sm"><div class="card-header"><h6 class="mb-0">Armazenamento</h6></div><div class="card-body" id="cfg-storage">Carregando...</div></div></div>' +
-            '<div class="col-md-6"><div class="card shadow-sm"><div class="card-header"><h6 class="mb-0">Download de Dados</h6></div><div class="card-body">' +
-                '<div class="mb-3"><label class="form-label">Ativo</label><input type="text" id="cfg-dl-ticker" class="form-control" placeholder="Ex: PETR4"></div>' +
-                '<div class="row g-2 mb-3"><div class="col"><label class="form-label">Início</label><input type="date" id="cfg-dl-start" class="form-control"></div><div class="col"><label class="form-label">Fim</label><input type="date" id="cfg-dl-end" class="form-control"></div></div>' +
-                '<button class="btn btn-primary" onclick="downloadData()"><i class="bi bi-download me-1"></i>Baixar</button><div id="cfg-dl-result" class="mt-2"></div>' +
-            '</div></div></div>' +
-            '<div class="col-md-6"><div class="card shadow-sm"><div class="card-header"><h6 class="mb-0">Atualização Manual</h6></div><div class="card-body">' +
-                '<p class="text-muted">Atualizar dados dos ativos B3.</p>' +
-                '<button class="btn btn-warning" onclick="manualUpdate()" id="btn-update"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar Tudo</button><div id="cfg-update-result" class="mt-2"></div>' +
-            '</div></div></div>' +
-            '<div class="col-md-6"><div class="card shadow-sm"><div class="card-header"><h6 class="mb-0">Alterar PIN</h6></div><div class="card-body">' +
-                '<div class="mb-3"><input type="password" id="cfg-new-pin" class="form-control" placeholder="Novo PIN"></div>' +
-                '<button class="btn btn-outline-primary" onclick="changePin()">Alterar</button><div id="cfg-pin-result" class="mt-2"></div>' +
-            '</div></div></div>' +
-            '<div class="col-12"><div class="card shadow-sm"><div class="card-header"><h6 class="mb-0">Ativos Salvos</h6></div><div class="card-body" id="cfg-assets">Carregando...</div></div></div>' +
-        '</div>' +
-        '<div class="mt-3"><button class="btn btn-outline-secondary" onclick="logout()"><i class="bi bi-box-arrow-left me-1"></i>Sair</button></div>';
-
-    var stats = await TradeAPI.get('/storage/stats');
-    var sd = document.getElementById('cfg-storage');
-    if (sd && stats) {
-        sd.innerHTML =
-            '<p><strong>Ativos:</strong> ' + stats.total_assets + '</p>' +
-            '<p><strong>Diários:</strong> ' + stats.daily_assets + ' | <strong>Intraday:</strong> ' + stats.intraday_assets + '</p>' +
-            '<p><strong>Registros:</strong> ' + stats.total_records + '</p>' +
-            '<p><strong>Backtests:</strong> ' + stats.total_backtests + '</p>' +
-            '<p><strong>Última atualização:</strong> ' + (stats.last_auto_update || 'Nunca') + '</p>';
-    }
-
-    var ad = await TradeAPI.get('/config/assets');
-    var assetsDiv = document.getElementById('cfg-assets');
-    var assets = (ad && ad.assets) || [];
-    if (assetsDiv) {
-        if (assets.length === 0) {
-            assetsDiv.innerHTML = '<p class="text-muted">Nenhum ativo salvo.</p>';
-        } else {
-            assetsDiv.innerHTML = '<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Ticker</th><th>Nome</th><th>Atualizado</th><th></th></tr></thead><tbody>' +
-                assets.map(function(a) {
-                    return '<tr><td class="fw-bold">' + a.ticker + '</td><td>' + (a.name || '—') + '</td><td>' + (a.last_update ? new Date(a.last_update).toLocaleDateString('pt-BR') : '—') + '</td><td><button class="btn btn-sm btn-outline-danger" onclick="deleteAsset(\'' + a.ticker + '\')"><i class="bi bi-trash"></i></button></td></tr>';
-                }).join('') + '</tbody></table></div>';
-        }
-    }
-}
-
-async function verifyPin() {
-    var pin = document.getElementById('cfg-pin').value;
-    var ed = document.getElementById('pin-error');
-    var resp = await TradeAPI.post('/config/verify-pin', { pin: pin });
-    if (resp && resp.valid) { APP.pin = pin; renderConfig(); }
-    else { ed.textContent = 'PIN incorreto'; ed.style.display = 'block'; }
-}
-
-async function downloadData() {
-    var ticker = document.getElementById('cfg-dl-ticker').value.toUpperCase();
-    var start = document.getElementById('cfg-dl-start').value;
-    var end = document.getElementById('cfg-dl-end').value;
-    var rd = document.getElementById('cfg-dl-result');
-    if (!ticker) { rd.innerHTML = '<span class="text-warning">Informe o ticker</span>'; return; }
-    rd.innerHTML = '<div class="spinner-border spinner-border-sm text-primary"></div> Baixando...';
-    var resp = await TradeAPI.post('/config/download-data', {
-        pin: APP.pin, ticker: ticker,
-        start_date: start || '2025-01-01',
-        end_date: end || new Date().toISOString().split('T')[0],
-        timeframe: 'daily'
-    });
-    if (resp && resp.success) rd.innerHTML = '<span class="text-success">' + resp.message + '</span>';
-    else rd.innerHTML = '<span class="text-danger">' + (resp ? resp.message : 'Erro') + '</span>';
-}
-
-async function manualUpdate() {
-    var btn = document.getElementById('btn-update');
-    var rd = document.getElementById('cfg-update-result');
-    btn.disabled = true;
-    rd.innerHTML = '<div class="spinner-border spinner-border-sm text-warning"></div> Atualizando...';
-    var resp = await TradeAPI.post('/config/update-all', { pin: APP.pin });
-    btn.disabled = false;
-    if (resp && resp.success) rd.innerHTML = '<span class="text-success">' + resp.message + '</span>';
-    else rd.innerHTML = '<span class="text-danger">Erro na atualização</span>';
-}
-
-async function changePin() {
-    var newPin = document.getElementById('cfg-new-pin').value;
-    var rd = document.getElementById('cfg-pin-result');
-    if (!newPin) { rd.innerHTML = '<span class="text-warning">Digite o novo PIN</span>'; return; }
-    var resp = await TradeAPI.post('/config/change-pin', { old_pin: APP.pin, new_pin: newPin });
-    if (resp && resp.success) { APP.pin = newPin; rd.innerHTML = '<span class="text-success">PIN alterado!</span>'; }
-    else rd.innerHTML = '<span class="text-danger">Erro ao alterar</span>';
-}
-
-async function deleteAsset(ticker) {
-    if (!confirm('Remover ' + ticker + '?')) return;
-    await TradeAPI.del('/config/asset/' + ticker + '?pin=' + APP.pin);
-    renderConfig();
-}
-
-function logout() { APP.pin = null; renderConfig(); }
-
-/* ═══════════════════════════════════════════
-   INIT
-   ═══════════════════════════════════════════ */
-
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.nav-link[data-page]').forEach(function(link) {
-        link.addEventListener('click', function(e) {
-            e.preventDefault();
-            navigate(link.dataset.page);
-        });
-    });
-    navigate('dashboard');
-});
+})();
