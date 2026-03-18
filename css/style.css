@@ -348,7 +348,6 @@ code{background:var(--bg-tertiary);padding:.15rem .4rem;border-radius:4px;font-s
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-lg);
     margin-bottom: 1.2rem;
-    overflow: hidden;
 }
 
 .results-card:hover {
@@ -377,6 +376,7 @@ code{background:var(--bg-tertiary);padding:.15rem .4rem;border-radius:4px;font-s
     overflow-y: visible;
     -webkit-overflow-scrolling: touch;
     width: 100%;
+    padding-bottom: 4px;
 }
 
 .results-scroll-wrapper table {
