@@ -344,26 +344,53 @@ code{background:var(--bg-tertiary);padding:.15rem .4rem;border-radius:4px;font-s
    SCROLL HORIZONTAL — TABELAS DE BACKTEST
    ============================================================ */
 
-/* A tabela de resultados fica dentro de:
-   #daily-results > .glass-card > .card-body-custom > .table-responsive > table
-   O .table-responsive já tem overflow-x:auto, mas a tabela precisa de min-width
-   e o .glass-card precisa permitir o overflow fluir */
+#daily-results .card-body-custom,
+#intra-results .card-body-custom,
+#bmf-results .card-body-custom {
+    padding: 0 !important;
+}
 
 #daily-results .table-responsive,
 #intra-results .table-responsive,
 #bmf-results .table-responsive {
     overflow-x: auto !important;
+    overflow-y: visible !important;
     max-width: 100% !important;
+    width: 100% !important;
+    display: block !important;
     -webkit-overflow-scrolling: touch;
+    border: none !important;
+    border-radius: 0 !important;
 }
 
 #daily-results .table-responsive table,
 #intra-results .table-responsive table,
 #bmf-results .table-responsive table {
-    min-width: 1200px !important;
+    min-width: 1400px !important;
+    width: max-content !important;
     white-space: nowrap !important;
+    table-layout: auto !important;
 }
 
+#daily-results .table-responsive table td,
+#intra-results .table-responsive table td,
+#bmf-results .table-responsive table td,
+#daily-results .table-responsive table th,
+#intra-results .table-responsive table th,
+#bmf-results .table-responsive table th {
+    white-space: nowrap !important;
+    overflow: visible !important;
+}
+
+#daily-results .glass-card,
+#intra-results .glass-card,
+#bmf-results .glass-card {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    overflow: visible !important;
+}
+
+/* Scrollbar verde */
 #daily-results .table-responsive::-webkit-scrollbar,
 #intra-results .table-responsive::-webkit-scrollbar,
 #bmf-results .table-responsive::-webkit-scrollbar {
@@ -382,10 +409,4 @@ code{background:var(--bg-tertiary);padding:.15rem .4rem;border-radius:4px;font-s
 #bmf-results .table-responsive::-webkit-scrollbar-thumb {
     background: var(--green-primary, #00d4a1);
     border-radius: 5px;
-}
-
-#daily-results .table-responsive::-webkit-scrollbar-thumb:hover,
-#intra-results .table-responsive::-webkit-scrollbar-thumb:hover,
-#bmf-results .table-responsive::-webkit-scrollbar-thumb:hover {
-    background: var(--green-hover, #00b88a);
 }
