@@ -344,73 +344,48 @@ code{background:var(--bg-tertiary);padding:.15rem .4rem;border-radius:4px;font-s
    SCROLL HORIZONTAL — TABELAS DE BACKTEST
    ============================================================ */
 
-/* Container dos resultados */
-#daily-results,
-#intra-results,
-#bmf-results {
+/* A tabela de resultados fica dentro de:
+   #daily-results > .glass-card > .card-body-custom > .table-responsive > table
+   O .table-responsive já tem overflow-x:auto, mas a tabela precisa de min-width
+   e o .glass-card precisa permitir o overflow fluir */
+
+#daily-results .table-responsive,
+#intra-results .table-responsive,
+#bmf-results .table-responsive {
     overflow-x: auto !important;
-    overflow-y: visible !important;
     max-width: 100% !important;
-    display: block !important;
     -webkit-overflow-scrolling: touch;
 }
 
-/* Tabela dentro dos resultados */
-#daily-results table,
-#intra-results table,
-#bmf-results table {
+#daily-results .table-responsive table,
+#intra-results .table-responsive table,
+#bmf-results .table-responsive table {
     min-width: 1200px !important;
-    width: max-content !important;
     white-space: nowrap !important;
-    table-layout: auto !important;
 }
 
-/* Garante que NENHUM pai esconda o overflow */
-.glass-card {
-    overflow: visible !important;
+#daily-results .table-responsive::-webkit-scrollbar,
+#intra-results .table-responsive::-webkit-scrollbar,
+#bmf-results .table-responsive::-webkit-scrollbar {
+    height: 10px;
 }
 
-/* Se a tabela estiver dentro de um div extra */
-#daily-results > div,
-#intra-results > div,
-#bmf-results > div {
-    overflow-x: auto !important;
-    max-width: 100% !important;
-    -webkit-overflow-scrolling: touch;
+#daily-results .table-responsive::-webkit-scrollbar-track,
+#intra-results .table-responsive::-webkit-scrollbar-track,
+#bmf-results .table-responsive::-webkit-scrollbar-track {
+    background: var(--bg-secondary, #0c0c1e);
+    border-radius: 5px;
 }
 
-/* Caso a section inteira precise de scroll */
-section,
-.section-content {
-    overflow-x: visible !important;
+#daily-results .table-responsive::-webkit-scrollbar-thumb,
+#intra-results .table-responsive::-webkit-scrollbar-thumb,
+#bmf-results .table-responsive::-webkit-scrollbar-thumb {
+    background: var(--green-primary, #00d4a1);
+    border-radius: 5px;
 }
 
-/* Scrollbar customizada (verde Trade Halley) */
-#daily-results::-webkit-scrollbar,
-#intra-results::-webkit-scrollbar,
-#bmf-results::-webkit-scrollbar,
-#daily-results > div::-webkit-scrollbar,
-#intra-results > div::-webkit-scrollbar,
-#bmf-results > div::-webkit-scrollbar {
-    height: 8px;
-}
-
-#daily-results::-webkit-scrollbar-track,
-#intra-results::-webkit-scrollbar-track,
-#bmf-results::-webkit-scrollbar-track,
-#daily-results > div::-webkit-scrollbar-track,
-#intra-results > div::-webkit-scrollbar-track,
-#bmf-results > div::-webkit-scrollbar-track {
-    background: #0a0a1a;
-    border-radius: 4px;
-}
-
-#daily-results::-webkit-scrollbar-thumb,
-#intra-results::-webkit-scrollbar-thumb,
-#bmf-results::-webkit-scrollbar-thumb,
-#daily-results > div::-webkit-scrollbar-thumb,
-#intra-results > div::-webkit-scrollbar-thumb,
-#bmf-results > div::-webkit-scrollbar-thumb {
-    background: #00d4a1;
-    border-radius: 4px;
+#daily-results .table-responsive::-webkit-scrollbar-thumb:hover,
+#intra-results .table-responsive::-webkit-scrollbar-thumb:hover,
+#bmf-results .table-responsive::-webkit-scrollbar-thumb:hover {
+    background: var(--green-hover, #00b88a);
 }
