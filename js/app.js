@@ -842,19 +842,17 @@ function displayResults(containerId, tableId, result) {
 
     if (rows.length === 0) { container.innerHTML = '<p class="text-muted" style="padding:1rem">Nenhum resultado encontrado.</p>'; return; }
 
-    let html = `<div class="results-card mt-4">
-        <div class="results-header"><i class="fas fa-table"></i> Resultados (${rows.length} ativo${rows.length>1?"s":""})</div>
-        <div class="results-scroll-wrapper">
-            <table class="table table-dark table-striped table-sm" id="${tableId}">
-                <thead><tr>
-                    <th>AÇÃO</th><th>TOTAL GAIN</th><th>% GAIN</th><th>TOTAL LOSS</th><th>% LOSS</th>
-                    <th>TOTAL TRADES</th><th>RESULTADO %</th><th>MAX DRAWDOWN %</th>
-                    <th>GANHO MÁXIMO %</th><th>GANHO MÉDIO %</th><th>VOLUME MÉDIO</th>
-                </tr></thead><tbody>`;
+    // Build table HTML
+    let tableHTML = `<table id="${tableId}" style="min-width:1400px;width:max-content;white-space:nowrap;table-layout:auto;border-collapse:collapse;font-size:.83rem;">
+        <thead><tr>
+            <th>AÇÃO</th><th>TOTAL GAIN</th><th>% GAIN</th><th>TOTAL LOSS</th><th>% LOSS</th>
+            <th>TOTAL TRADES</th><th>RESULTADO %</th><th>MAX DRAWDOWN %</th>
+            <th>GANHO MÁXIMO %</th><th>GANHO MÉDIO %</th><th>VOLUME MÉDIO</th>
+        </tr></thead><tbody>`;
 
     rows.forEach(r => {
         const cls = (r.resultado_pct||0) >= 0 ? "text-success" : "text-danger";
-        html += `<tr>
+        tableHTML += `<tr>
             <td><strong>${r.acao||""}</strong></td>
             <td>${r.total_gain||0}</td><td>${fmtPct(r.pct_gain)}</td>
             <td>${r.total_loss||0}</td><td>${fmtPct(r.pct_loss)}</td>
@@ -866,12 +864,60 @@ function displayResults(containerId, tableId, result) {
             <td>${fmtVol(r.volume_medio)}</td>
         </tr>`;
     });
+    tableHTML += `</tbody></table>`;
 
-    html += `</tbody></table></div></div>`;
-    container.innerHTML = html;
+    // Create elements via DOM (not innerHTML) to guarantee styles
+    container.innerHTML = '';
+
+    // Card wrapper
+    const card = document.createElement('div');
+    card.style.cssText = 'background:rgba(18,18,48,0.55);border:1px solid rgba(255,255,255,0.06);border-radius:16px;margin-top:1.5rem;margin-bottom:1.2rem;';
+
+    // Header
+    const header = document.createElement('div');
+    header.style.cssText = 'padding:1rem 1.3rem;border-bottom:1px solid rgba(255,255,255,0.08);font-size:.9rem;font-weight:600;color:#eeeef5;display:flex;align-items:center;gap:.5rem;background:rgba(255,255,255,0.02);border-radius:16px 16px 0 0;';
+    header.innerHTML = `<i class="fas fa-table" style="color:#00d4a1;font-size:.85rem;"></i> Resultados (${rows.length} ativo${rows.length>1?"s":""})`;
+    card.appendChild(header);
+
+    // Scroll wrapper — THIS is the key element
+    const scrollWrapper = document.createElement('div');
+    scrollWrapper.style.cssText = 'overflow-x:scroll;overflow-y:visible;-webkit-overflow-scrolling:touch;width:100%;max-width:100%;display:block;padding-bottom:2px;';
+    scrollWrapper.innerHTML = tableHTML;
+    card.appendChild(scrollWrapper);
+
+    container.appendChild(card);
+
+    // Style thead/tbody after insertion
+    const tbl = document.getElementById(tableId);
+    if (tbl) {
+        tbl.querySelectorAll('thead th').forEach(th => {
+            th.style.cssText = 'padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;position:sticky;top:0;cursor:pointer;user-select:none;';
+        });
+        tbl.querySelectorAll('tbody td').forEach(td => {
+            td.style.cssText = 'padding:.6rem .8rem;border-bottom:1px solid rgba(255,255,255,0.03);color:#eeeef5;vertical-align:middle;white-space:nowrap;';
+        });
+        tbl.querySelectorAll('tbody tr').forEach(tr => {
+            tr.addEventListener('mouseenter', () => tr.style.background = 'rgba(0,212,161,0.04)');
+            tr.addEventListener('mouseleave', () => tr.style.background = '');
+        });
+    }
+
+    // Force scrollbar visibility
+    const styleId = 'results-scroll-style';
+    if (!document.getElementById(styleId)) {
+        const s = document.createElement('style');
+        s.id = styleId;
+        s.textContent = `
+            #${containerId} > div > div:nth-child(2)::-webkit-scrollbar { height: 12px !important; }
+            #${containerId} > div > div:nth-child(2)::-webkit-scrollbar-track { background: #0c0c1e !important; border-radius: 6px !important; }
+            #${containerId} > div > div:nth-child(2)::-webkit-scrollbar-thumb { background: #00d4a1 !important; border-radius: 6px !important; }
+            #${containerId} > div > div:nth-child(2)::-webkit-scrollbar-thumb:hover { background: #00b88a !important; }
+        `;
+        document.head.appendChild(s);
+    }
+
     makeSortable(tableId);
 }
-
 
 // ============================================================
 // INIT
