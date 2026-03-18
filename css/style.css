@@ -343,36 +343,26 @@ code{background:var(--bg-tertiary);padding:.15rem .4rem;border-radius:4px;font-s
 /* ============================================================
    SCROLL HORIZONTAL — TABELA DE RESULTADOS BACKTEST
    ============================================================ */
-#daily-results,
-#intra-results,
-#bmf-results {
+.glass-card {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
 }
 
-#daily-results table,
-#intra-results table,
-#bmf-results table {
-    min-width: 900px;
+.glass-card table {
+    min-width: 1200px;
+    white-space: nowrap;
 }
 
-#daily-results::-webkit-scrollbar,
-#intra-results::-webkit-scrollbar,
-#bmf-results::-webkit-scrollbar {
+.glass-card::-webkit-scrollbar {
     height: 8px;
 }
 
-#daily-results::-webkit-scrollbar-track,
-#intra-results::-webkit-scrollbar-track,
-#bmf-results::-webkit-scrollbar-track {
+.glass-card::-webkit-scrollbar-track {
     background: var(--bg-secondary, #0a0a1a);
     border-radius: 4px;
 }
 
-#daily-results::-webkit-scrollbar-thumb,
-#intra-results::-webkit-scrollbar-thumb,
-#bmf-results::-webkit-scrollbar-thumb {
+.glass-card::-webkit-scrollbar-thumb {
     background: var(--green-primary, #00d4a1);
     border-radius: 4px;
 }
-
