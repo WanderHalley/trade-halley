@@ -341,28 +341,76 @@ code{background:var(--bg-tertiary);padding:.15rem .4rem;border-radius:4px;font-s
 .no-assets-msg{text-align:center;padding:2rem;color:var(--text-muted);font-size:.85rem}
 
 /* ============================================================
-   SCROLL HORIZONTAL — TABELA DE RESULTADOS BACKTEST
+   SCROLL HORIZONTAL — TABELAS DE BACKTEST
    ============================================================ */
-.glass-card {
-    overflow-x: auto;
+
+/* Container dos resultados */
+#daily-results,
+#intra-results,
+#bmf-results {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    max-width: 100% !important;
+    display: block !important;
     -webkit-overflow-scrolling: touch;
 }
 
-.glass-card table {
-    min-width: 1200px;
-    white-space: nowrap;
+/* Tabela dentro dos resultados */
+#daily-results table,
+#intra-results table,
+#bmf-results table {
+    min-width: 1200px !important;
+    width: max-content !important;
+    white-space: nowrap !important;
+    table-layout: auto !important;
 }
 
-.glass-card::-webkit-scrollbar {
+/* Garante que NENHUM pai esconda o overflow */
+.glass-card {
+    overflow: visible !important;
+}
+
+/* Se a tabela estiver dentro de um div extra */
+#daily-results > div,
+#intra-results > div,
+#bmf-results > div {
+    overflow-x: auto !important;
+    max-width: 100% !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Caso a section inteira precise de scroll */
+section,
+.section-content {
+    overflow-x: visible !important;
+}
+
+/* Scrollbar customizada (verde Trade Halley) */
+#daily-results::-webkit-scrollbar,
+#intra-results::-webkit-scrollbar,
+#bmf-results::-webkit-scrollbar,
+#daily-results > div::-webkit-scrollbar,
+#intra-results > div::-webkit-scrollbar,
+#bmf-results > div::-webkit-scrollbar {
     height: 8px;
 }
 
-.glass-card::-webkit-scrollbar-track {
-    background: var(--bg-secondary, #0a0a1a);
+#daily-results::-webkit-scrollbar-track,
+#intra-results::-webkit-scrollbar-track,
+#bmf-results::-webkit-scrollbar-track,
+#daily-results > div::-webkit-scrollbar-track,
+#intra-results > div::-webkit-scrollbar-track,
+#bmf-results > div::-webkit-scrollbar-track {
+    background: #0a0a1a;
     border-radius: 4px;
 }
 
-.glass-card::-webkit-scrollbar-thumb {
-    background: var(--green-primary, #00d4a1);
+#daily-results::-webkit-scrollbar-thumb,
+#intra-results::-webkit-scrollbar-thumb,
+#bmf-results::-webkit-scrollbar-thumb,
+#daily-results > div::-webkit-scrollbar-thumb,
+#intra-results > div::-webkit-scrollbar-thumb,
+#bmf-results > div::-webkit-scrollbar-thumb {
+    background: #00d4a1;
     border-radius: 4px;
 }
