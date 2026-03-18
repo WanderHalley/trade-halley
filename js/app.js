@@ -842,14 +842,15 @@ function displayResults(containerId, tableId, result) {
 
     if (rows.length === 0) { container.innerHTML = '<p class="text-muted" style="padding:1rem">Nenhum resultado encontrado.</p>'; return; }
 
-    let html = `<div class="glass-card mt-4"><div class="card-header-custom"><i class="fas fa-table"></i> Resultados (${rows.length} ativo${rows.length>1?"s":""})</div><div class="card-body-custom">
-    <div class="table-responsive">
-        <table class="table table-dark table-striped table-sm" id="${tableId}">
-            <thead><tr>
-                <th>AÇÃO</th><th>TOTAL GAIN</th><th>% GAIN</th><th>TOTAL LOSS</th><th>% LOSS</th>
-                <th>TOTAL TRADES</th><th>RESULTADO %</th><th>MAX DRAWDOWN %</th>
-                <th>GANHO MÁXIMO %</th><th>GANHO MÉDIO %</th><th>VOLUME MÉDIO</th>
-            </tr></thead><tbody>`;
+    let html = `<div class="results-card mt-4">
+        <div class="results-header"><i class="fas fa-table"></i> Resultados (${rows.length} ativo${rows.length>1?"s":""})</div>
+        <div class="results-scroll-wrapper">
+            <table class="table table-dark table-striped table-sm" id="${tableId}">
+                <thead><tr>
+                    <th>AÇÃO</th><th>TOTAL GAIN</th><th>% GAIN</th><th>TOTAL LOSS</th><th>% LOSS</th>
+                    <th>TOTAL TRADES</th><th>RESULTADO %</th><th>MAX DRAWDOWN %</th>
+                    <th>GANHO MÁXIMO %</th><th>GANHO MÉDIO %</th><th>VOLUME MÉDIO</th>
+                </tr></thead><tbody>`;
 
     rows.forEach(r => {
         const cls = (r.resultado_pct||0) >= 0 ? "text-success" : "text-danger";
@@ -866,10 +867,11 @@ function displayResults(containerId, tableId, result) {
         </tr>`;
     });
 
-    html += `</tbody></table></div></div></div>`;
+    html += `</tbody></table></div></div>`;
     container.innerHTML = html;
     makeSortable(tableId);
 }
+
 
 // ============================================================
 // INIT
