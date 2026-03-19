@@ -881,7 +881,7 @@ function displayResults(containerId, tableId, result) {
 
     // Scroll wrapper — THIS is the key element
     const scrollWrapper = document.createElement('div');
-    scrollWrapper.style.cssText = 'overflow-x:scroll;overflow-y:visible;-webkit-overflow-scrolling:touch;width:100%;max-width:100%;display:block;padding-bottom:2px;';
+    scrollWrapper.style.cssText = 'overflow-x:scroll;overflow-y:visible;-webkit-overflow-scrolling:touch;display:block;padding-bottom:2px;width:0;min-width:100%;max-width:calc(100vw - 300px);';
     scrollWrapper.innerHTML = tableHTML;
     card.appendChild(scrollWrapper);
 
