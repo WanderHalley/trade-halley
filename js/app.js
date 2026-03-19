@@ -9,6 +9,25 @@ function setBrapiToken(token) { localStorage.setItem("brapi_token", token); }
 function getStoredPin() { return localStorage.getItem("config_pin") || ""; }
 function setStoredPin(pin) { localStorage.setItem("config_pin", pin); }
 
+// ============================================================
+// ABORT CONTROLLERS — cancela requisição anterior ao re-executar
+// ============================================================
+var backtestControllers = {
+    daily: null,
+    intraday: null,
+    bmf: null
+};
+
+function abortPrevious(key) {
+    if (backtestControllers[key]) {
+        backtestControllers[key].abort();
+        backtestControllers[key] = null;
+    }
+}
+
+// ============================================================
+// API HELPERS
+// ============================================================
 async function apiGet(path) {
     try {
         var resp = await fetch(API_BASE + path);
@@ -17,19 +36,25 @@ async function apiGet(path) {
     } catch (e) { console.error("GET " + path + ":", e); return null; }
 }
 
-async function apiPost(path, body) {
+async function apiPost(path, body, signal) {
     try {
-        var resp = await fetch(API_BASE + path, {
+        var opts = {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body)
-        });
+        };
+        if (signal) opts.signal = signal;
+        var resp = await fetch(API_BASE + path, opts);
         if (!resp.ok) {
             var txt = await resp.text();
             throw new Error("HTTP " + resp.status + ": " + txt);
         }
         return await resp.json();
-    } catch (e) { console.error("POST " + path + ":", e); return null; }
+    } catch (e) {
+        if (e.name === "AbortError") { console.log("POST " + path + ": cancelado"); return "__ABORTED__"; }
+        console.error("POST " + path + ":", e);
+        return null;
+    }
 }
 
 async function apiDelete(path) {
@@ -64,6 +89,9 @@ async function fetchAllBrapiTickers(type) {
     return tickers;
 }
 
+// ============================================================
+// NAVIGATION
+// ============================================================
 var currentPage = "daily";
 
 function navigate(page) {
@@ -88,6 +116,9 @@ function navigate(page) {
     }
 }
 
+// ============================================================
+// UTILITIES
+// ============================================================
 function fmtPct(val) {
     if (val === null || val === undefined || isNaN(val)) return "0%";
     return val.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 3 }) + "%";
@@ -122,6 +153,9 @@ function populateSelect(selectId, options, defaultVal) {
     });
 }
 
+// ============================================================
+// SORTABLE TABLES
+// ============================================================
 var sortState = {};
 
 function makeSortable(tableId) {
@@ -190,11 +224,14 @@ function setupDirectionButtons(buyBtnId, sellBtnId, hiddenFieldId) {
     });
 }
 
+// ============================================================
+// STRATEGIES PAGE
+// ============================================================
 async function loadStrategiesPage() {
     var data = await apiGet("/strategies/all");
     var container = document.getElementById("strategies-container");
     if (!container) return;
-    if (!data) { container.innerHTML = '<p class="text-muted">Erro ao carregar estratégias.</p>'; return; }
+    if (!data) { container.innerHTML = '<p class="text-muted">Erro ao carregar estrat\u00e9gias.</p>'; return; }
     var html = "";
     function buildSection(icon, title, items, cols) {
         if (!items || items.length === 0) return "";
@@ -218,6 +255,9 @@ async function loadStrategiesPage() {
     container.innerHTML = html;
 }
 
+// ============================================================
+// SAVED BACKTESTS
+// ============================================================
 async function loadSavedPage() {
     var data = await apiGet("/backtests/saved");
     var container = document.getElementById("saved-container");
@@ -244,6 +284,9 @@ async function deleteSavedBacktest(id) {
     loadSavedPage();
 }
 
+// ============================================================
+// CONFIG PAGE
+// ============================================================
 var configAuthenticated = false;
 
 async function loadConfigPage() {
@@ -323,15 +366,9 @@ async function loadConfigAssetsTable() {
         var dStart = a.daily_start || "\u2014", dEnd = a.daily_end || "\u2014";
         var iStart = a.intraday_start || "", iEnd = a.intraday_end || "";
         var dRec = a.daily_records || 0, iRec = a.intraday_records || 0;
-        if (dRec > 0) {
-            html += '<tr><td><strong>' + (a.ticker || "") + '</strong></td><td>' + (a.name || "\u2014") + '</td><td>' + lastUpd + '</td><td>' + dStart + '</td><td>' + dEnd + '</td><td>Di\u00e1rio</td><td>' + dRec.toLocaleString("pt-BR") + '</td></tr>';
-        }
-        if (iRec > 0) {
-            html += '<tr><td><strong>' + (a.ticker || "") + '</strong></td><td>' + (a.name || "\u2014") + '</td><td>' + lastUpd + '</td><td>' + (iStart || "\u2014") + '</td><td>' + (iEnd || "\u2014") + '</td><td>Intraday</td><td>' + iRec.toLocaleString("pt-BR") + '</td></tr>';
-        }
-        if (dRec === 0 && iRec === 0) {
-            html += '<tr><td><strong>' + (a.ticker || "") + '</strong></td><td>' + (a.name || "\u2014") + '</td><td>' + lastUpd + '</td><td>\u2014</td><td>\u2014</td><td>\u2014</td><td>0</td></tr>';
-        }
+        if (dRec > 0) html += '<tr><td><strong>' + (a.ticker || "") + '</strong></td><td>' + (a.name || "\u2014") + '</td><td>' + lastUpd + '</td><td>' + dStart + '</td><td>' + dEnd + '</td><td>Di\u00e1rio</td><td>' + dRec.toLocaleString("pt-BR") + '</td></tr>';
+        if (iRec > 0) html += '<tr><td><strong>' + (a.ticker || "") + '</strong></td><td>' + (a.name || "\u2014") + '</td><td>' + lastUpd + '</td><td>' + (iStart || "\u2014") + '</td><td>' + (iEnd || "\u2014") + '</td><td>Intraday</td><td>' + iRec.toLocaleString("pt-BR") + '</td></tr>';
+        if (dRec === 0 && iRec === 0) html += '<tr><td><strong>' + (a.ticker || "") + '</strong></td><td>' + (a.name || "\u2014") + '</td><td>' + lastUpd + '</td><td>\u2014</td><td>\u2014</td><td>\u2014</td><td>0</td></tr>';
     });
     html += '</tbody></table></div></div>';
     container.innerHTML = html;
@@ -341,10 +378,7 @@ async function loadConfigAssetsTable() {
 function saveBrapiToken() {
     var input = document.getElementById("config-brapi-token");
     var status = document.getElementById("config-token-status");
-    if (!input || !input.value.trim()) {
-        if (status) { status.className = "config-status error"; status.textContent = "Token n\u00e3o pode ser vazio."; }
-        return;
-    }
+    if (!input || !input.value.trim()) { if (status) { status.className = "config-status error"; status.textContent = "Token n\u00e3o pode ser vazio."; } return; }
     setBrapiToken(input.value.trim());
     if (status) { status.className = "config-status success"; status.textContent = "Token salvo com sucesso!"; }
 }
@@ -353,10 +387,7 @@ async function changeConfigPin() {
     var oldPin = document.getElementById("config-old-pin") ? document.getElementById("config-old-pin").value.trim() : "";
     var newPin = document.getElementById("config-new-pin") ? document.getElementById("config-new-pin").value.trim() : "";
     var status = document.getElementById("config-pin-change-status");
-    if (!oldPin || !newPin) {
-        if (status) { status.className = "config-status error"; status.textContent = "Preencha ambos os campos."; }
-        return;
-    }
+    if (!oldPin || !newPin) { if (status) { status.className = "config-status error"; status.textContent = "Preencha ambos os campos."; } return; }
     var result = await apiPost("/config/change-pin", { old_pin: oldPin, new_pin: newPin });
     if (result && result.success) {
         setStoredPin(newPin);
@@ -391,8 +422,8 @@ async function downloadAllAssets() {
         var brapiType = assetType;
         if (assetType === "etf") brapiType = "stock";
         tickers = await fetchAllBrapiTickers(brapiType);
-        if (assetType === "etf") { tickers = tickers.filter(function(t) { return t.endsWith("11"); }); }
-        else if (assetType === "stock") { tickers = tickers.filter(function(t) { return !t.endsWith("11") && !t.endsWith("F"); }); }
+        if (assetType === "etf") tickers = tickers.filter(function(t) { return t.endsWith("11"); });
+        else if (assetType === "stock") tickers = tickers.filter(function(t) { return !t.endsWith("11") && !t.endsWith("F"); });
     } catch (e) {
         if (progressLog) progressLog.innerHTML = '<div class="log-error">Erro ao buscar lista: ' + e.message + '</div>';
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-download"></i> Baixar Dados'; }
@@ -410,17 +441,9 @@ async function downloadAllAssets() {
         var ticker = tickers[i];
         try {
             var result = await apiPost("/config/download-data", { pin: pin, ticker: ticker, start_date: startDate, end_date: endDate, timeframe: timeframe });
-            if (result && result.success) {
-                successCount++;
-                if (progressLog) progressLog.innerHTML += '<div class="log-success">\u2713 ' + ticker + ' \u2014 ' + (result.records || 0) + ' registros</div>';
-            } else {
-                errorCount++;
-                if (progressLog) progressLog.innerHTML += '<div class="log-error">\u2717 ' + ticker + ' \u2014 ' + (result ? result.message || "erro" : "erro") + '</div>';
-            }
-        } catch (e) {
-            errorCount++;
-            if (progressLog) progressLog.innerHTML += '<div class="log-error">\u2717 ' + ticker + ' \u2014 ' + e.message + '</div>';
-        }
+            if (result && result.success) { successCount++; if (progressLog) progressLog.innerHTML += '<div class="log-success">\u2713 ' + ticker + ' \u2014 ' + (result.records || 0) + ' registros</div>'; }
+            else { errorCount++; if (progressLog) progressLog.innerHTML += '<div class="log-error">\u2717 ' + ticker + ' \u2014 ' + (result ? result.message || "erro" : "erro") + '</div>'; }
+        } catch (e) { errorCount++; if (progressLog) progressLog.innerHTML += '<div class="log-error">\u2717 ' + ticker + ' \u2014 ' + e.message + '</div>'; }
         var pct = Math.round(((i + 1) / tickers.length) * 100);
         if (progressBar) progressBar.style.width = pct + "%";
         if (progressCount) progressCount.textContent = (i + 1) + "/" + tickers.length;
@@ -465,17 +488,9 @@ async function updateAllAssets() {
         var startFrom = lastDate ? lastDate.split("T")[0] : "";
         try {
             var result = await apiPost("/config/download-data", { pin: pin, ticker: ticker, start_date: startFrom, end_date: today, timeframe: asset.timeframe || timeframe });
-            if (result && result.success) {
-                successCount++;
-                if (progressLog) progressLog.innerHTML += '<div class="log-success">\u2713 ' + ticker + ' \u2014 ' + (result.records || 0) + ' novos</div>';
-            } else {
-                errorCount++;
-                if (progressLog) progressLog.innerHTML += '<div class="log-error">\u2717 ' + ticker + ' \u2014 ' + (result ? result.message || "erro" : "erro") + '</div>';
-            }
-        } catch (e) {
-            errorCount++;
-            if (progressLog) progressLog.innerHTML += '<div class="log-error">\u2717 ' + ticker + ' \u2014 ' + e.message + '</div>';
-        }
+            if (result && result.success) { successCount++; if (progressLog) progressLog.innerHTML += '<div class="log-success">\u2713 ' + ticker + ' \u2014 ' + (result.records || 0) + ' novos</div>'; }
+            else { errorCount++; if (progressLog) progressLog.innerHTML += '<div class="log-error">\u2717 ' + ticker + ' \u2014 ' + (result ? result.message || "erro" : "erro") + '</div>'; }
+        } catch (e) { errorCount++; if (progressLog) progressLog.innerHTML += '<div class="log-error">\u2717 ' + ticker + ' \u2014 ' + e.message + '</div>'; }
         var pct = Math.round(((i + 1) / assets.length) * 100);
         if (progressBar) progressBar.style.width = pct + "%";
         if (progressCount) progressCount.textContent = (i + 1) + "/" + assets.length;
@@ -513,6 +528,15 @@ async function loadDailyPage() {
 }
 
 async function runDailyBacktest() {
+    // 1) Cancela requisição anterior se existir
+    abortPrevious("daily");
+    // 2) Limpa resultados anteriores
+    var resultsDiv = document.getElementById("daily-results");
+    if (resultsDiv) resultsDiv.innerHTML = "";
+    // 3) Cria novo controller
+    var controller = new AbortController();
+    backtestControllers.daily = controller;
+
     var entryStrategy = document.getElementById("daily-entry-strategy") ? document.getElementById("daily-entry-strategy").value : "";
     var exitStrategy = document.getElementById("daily-exit-strategy") ? document.getElementById("daily-exit-strategy").value : "";
     var direction = document.getElementById("daily-direction") ? document.getElementById("daily-direction").value : "compra";
@@ -528,16 +552,17 @@ async function runDailyBacktest() {
         var body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction: direction, variation_pct: variationPct, start_date: startDate || null, end_date: endDate || null };
         if (marketSel === "custom" && tickersInput) {
             body.tickers = tickersInput.split(",").map(function(t) { return t.trim().toUpperCase(); }).filter(function(t) { return t; });
-        } else {
-            body.market = "b3";
-        }
-        var result = await apiPost("/backtest/daily", body);
+        } else { body.market = "b3"; }
+        var result = await apiPost("/backtest/daily", body, controller.signal);
+        if (result === "__ABORTED__") return; // foi cancelado, não faz nada
         if (!result) { alert("Erro ao executar backtest."); return; }
         displayResults("daily-results", "daily-results-table", result);
     } catch (e) {
+        if (e.name === "AbortError") return;
         console.error("runDailyBacktest error:", e);
         alert("Erro ao executar backtest: " + e.message);
     } finally {
+        backtestControllers.daily = null;
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play"></i> Executar Back-teste'; }
     }
 }
@@ -558,6 +583,12 @@ async function loadIntradayPage() {
 }
 
 async function runIntradayBacktest() {
+    abortPrevious("intraday");
+    var resultsDiv = document.getElementById("intra-results");
+    if (resultsDiv) resultsDiv.innerHTML = "";
+    var controller = new AbortController();
+    backtestControllers.intraday = controller;
+
     var entryStrategy = document.getElementById("intra-entry-strategy") ? document.getElementById("intra-entry-strategy").value : "";
     var exitStrategy = document.getElementById("intra-exit-strategy") ? document.getElementById("intra-exit-strategy").value : "";
     var direction = document.getElementById("intra-direction") ? document.getElementById("intra-direction").value : "compra";
@@ -575,16 +606,17 @@ async function runIntradayBacktest() {
         var body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction: direction, variation_pct: variationPct, hour_start: hourStart, hour_end: hourEnd, period: "3mo", start_date: startDate || null, end_date: endDate || null };
         if (marketSel === "custom" && tickersInput) {
             body.tickers = tickersInput.split(",").map(function(t) { return t.trim().toUpperCase(); }).filter(function(t) { return t; });
-        } else {
-            body.market = "b3";
-        }
-        var result = await apiPost("/backtest/intraday", body);
+        } else { body.market = "b3"; }
+        var result = await apiPost("/backtest/intraday", body, controller.signal);
+        if (result === "__ABORTED__") return;
         if (!result) { alert("Erro ao executar backtest intraday."); return; }
         displayResults("intra-results", "intra-results-table", result);
     } catch (e) {
+        if (e.name === "AbortError") return;
         console.error("runIntradayBacktest error:", e);
         alert("Erro ao executar backtest: " + e.message);
     } finally {
+        backtestControllers.intraday = null;
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play"></i> Executar Back-teste Intraday B3'; }
     }
 }
@@ -605,6 +637,12 @@ async function loadBmfIntradayPage() {
 }
 
 async function runBmfIntradayBacktest() {
+    abortPrevious("bmf");
+    var resultsDiv = document.getElementById("bmf-results");
+    if (resultsDiv) resultsDiv.innerHTML = "";
+    var controller = new AbortController();
+    backtestControllers.bmf = controller;
+
     var entryStrategy = document.getElementById("bmf-entry-strategy") ? document.getElementById("bmf-entry-strategy").value : "";
     var exitStrategy = document.getElementById("bmf-exit-strategy") ? document.getElementById("bmf-exit-strategy").value : "";
     var direction = document.getElementById("bmf-direction") ? document.getElementById("bmf-direction").value : "compra";
@@ -622,16 +660,17 @@ async function runBmfIntradayBacktest() {
         var body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction: direction, variation_pct: variationPct, hour_start: hourStart, hour_end: hourEnd, period: "3mo", start_date: startDate || null, end_date: endDate || null };
         if (marketSel === "custom" && tickersInput) {
             body.tickers = tickersInput.split(",").map(function(t) { return t.trim().toUpperCase(); }).filter(function(t) { return t; });
-        } else {
-            body.market = "bmf";
-        }
-        var result = await apiPost("/backtest/intraday", body);
+        } else { body.market = "bmf"; }
+        var result = await apiPost("/backtest/intraday", body, controller.signal);
+        if (result === "__ABORTED__") return;
         if (!result) { alert("Erro ao executar backtest BMF."); return; }
         displayResults("bmf-results", "bmf-results-table", result);
     } catch (e) {
+        if (e.name === "AbortError") return;
         console.error("runBmfIntradayBacktest error:", e);
         alert("Erro ao executar backtest: " + e.message);
     } finally {
+        backtestControllers.bmf = null;
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play"></i> Executar Back-teste BMF Intraday'; }
     }
 }
