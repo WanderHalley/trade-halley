@@ -319,27 +319,7 @@ select.form-input{cursor:pointer;-webkit-appearance:none;appearance:none;backgro
 }
 @media(max-width:480px){
     .col-md-3,.col-md-4,.col-md-6{flex:0 0 100%;max-width:100%}
-}
-.d-flex{display:flex!important}
-.justify-content-between{justify-content:space-between!important}
-.p-3{padding:1rem!important}
-.text-light{color:var(--text-primary)!important}
-code{background:var(--bg-tertiary);padding:.15rem .4rem;border-radius:4px;font-size:.8rem;color:var(--green-primary)}
-
-/* ─── PIN Login ─── */
-.pin-login-container{display:flex;justify-content:center;align-items:center;min-height:50vh}
-.pin-login-container .glass-card{max-width:420px;width:100%}
-.pin-icon{font-size:2.5rem;color:var(--green-primary);margin-bottom:.8rem}
-.pin-title{font-size:1.3rem;font-weight:700;color:var(--text-primary);margin-bottom:.3rem}
-.pin-subtitle{font-size:.85rem;color:var(--text-secondary);margin-bottom:0}
-.pin-input{text-align:center;font-size:1.3rem;letter-spacing:.5rem;font-weight:700;padding:.8rem}
-
-/* ─── Assets Table in Config ─── */
-.assets-stored-table{max-height:400px;overflow-y:auto}
-.assets-stored-table .table{font-size:.78rem}
-.assets-stored-table .table th{font-size:.7rem}
-.no-assets-msg{text-align:center;padding:2rem;color:var(--text-muted);font-size:.85rem}
-/* ─── Results Scroll Fix ─── */
+   /* ─── Results Scroll Fix ─── */
 .results-scroll-wrapper{
     overflow-x:auto!important;
     overflow-y:visible!important;
@@ -362,4 +342,26 @@ code{background:var(--bg-tertiary);padding:.15rem .4rem;border-radius:4px;font-s
 .results-scroll-wrapper::-webkit-scrollbar-thumb:hover{
     background:var(--green-hover);
 }
+}
+.d-flex{display:flex!important}
+.justify-content-between{justify-content:space-between!important}
+.p-3{padding:1rem!important}
+.text-light{color:var(--text-primary)!important}
+code{background:var(--bg-tertiary);padding:.15rem .4rem;border-radius:4px;font-size:.8rem;color:var(--green-primary)}
+
+/* ─── PIN Login ─── */
+.pin-login-container{display:flex;justify-content:center;align-items:center;min-height:50vh}
+.pin-login-container .glass-card{max-width:420px;width:100%}
+.pin-icon{font-size:2.5rem;color:var(--green-primary);margin-bottom:.8rem}
+.pin-title{font-size:1.3rem;font-weight:700;color:var(--text-primary);margin-bottom:.3rem}
+.pin-subtitle{font-size:.85rem;color:var(--text-secondary);margin-bottom:0}
+.pin-input{text-align:center;font-size:1.3rem;letter-spacing:.5rem;font-weight:700;padding:.8rem}
+
+/* ─── Assets Table in Config ─── */
+.assets-stored-table{max-height:400px;overflow-y:auto}
+.assets-stored-table .table{font-size:.78rem}
+.assets-stored-table .table th{font-size:.7rem}
+.no-assets-msg{text-align:center;padding:2rem;color:var(--text-muted);font-size:.85rem}
+
+
 
