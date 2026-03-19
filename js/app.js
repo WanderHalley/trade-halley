@@ -844,12 +844,27 @@ function displayResults(containerId, tableId, result) {
     let rows = [];
     if (result.ticker && result.metrics) {
         const m = result.metrics;
-        rows.push({ acao: result.ticker, total_gain: m.total_gain, pct_gain: m.pct_gain, total_loss: m.total_loss, pct_loss: m.pct_loss, total_trades: m.total_trades, resultado_pct: m.resultado_pct, max_drawdown_pct: m.max_drawdown_pct, ganho_maximo_pct: m.ganho_maximo_pct, ganho_medio_pct: m.ganho_medio_pct, volume_medio: m.volume_medio });
+        rows.push({
+            acao: result.ticker,
+            total_gain: m.total_gain,
+            pct_gain: m.pct_gain,
+            total_loss: m.total_loss,
+            pct_loss: m.pct_loss,
+            total_trades: m.total_trades,
+            resultado_pct: m.resultado_pct,
+            max_drawdown_pct: m.max_drawdown_pct,
+            ganho_maximo_pct: m.ganho_maximo_pct,
+            ganho_medio_pct: m.ganho_medio_pct,
+            volume_medio: m.volume_medio
+        });
     } else if (result.results) {
         rows = result.results;
     }
 
-    if (rows.length === 0) { container.innerHTML = '<p class="text-muted" style="padding:1rem">Nenhum resultado encontrado.</p>'; return; }
+    if (rows.length === 0) {
+        container.innerHTML = '<p class="text-muted" style="padding:1rem">Nenhum resultado encontrado.</p>';
+        return;
+    }
 
     // Inject scoped scrollbar style
     const styleId = tableId + "-scroll-style";
@@ -866,35 +881,38 @@ function displayResults(containerId, tableId, result) {
         #${containerId} .results-scroll-wrapper::-webkit-scrollbar-thumb:hover { background: #00b88a; }
     `;
 
+    const thStyle = "padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;";
+    const tdStyle = "padding:.6rem .8rem;border-bottom:1px solid rgba(255,255,255,0.04);color:#e0e0e0;";
+
     let tableHTML = `<table id="${tableId}" style="min-width:1400px;width:max-content;white-space:nowrap;table-layout:auto;border-collapse:collapse;font-size:.83rem;">
         <thead><tr>
-            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">AÇÃO</th>
-            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">TOTAL GAIN</th>
-            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">% GAIN</th>
-            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">TOTAL LOSS</th>
-            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">% LOSS</th>
-            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">TOTAL TRADES</th>
-            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">RESULTADO %</th>
-            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">MAX DRAWDOWN %</th>
-            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">GANHO MÁXIMO %</th>
-            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">GANHO MÉDIO %</th>
-            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">VOLUME MÉDIO</th>
+            <th style="${thStyle}">AÇÃO</th>
+            <th style="${thStyle}">TOTAL GAIN</th>
+            <th style="${thStyle}">% GAIN</th>
+            <th style="${thStyle}">TOTAL LOSS</th>
+            <th style="${thStyle}">% LOSS</th>
+            <th style="${thStyle}">TOTAL TRADES</th>
+            <th style="${thStyle}">RESULTADO %</th>
+            <th style="${thStyle}">MAX DRAWDOWN %</th>
+            <th style="${thStyle}">GANHO MÁXIMO %</th>
+            <th style="${thStyle}">GANHO MÉDIO %</th>
+            <th style="${thStyle}">VOLUME MÉDIO</th>
         </tr></thead><tbody>`;
 
-    rows.forEach(r => {
-        const cls = (r.resultado_pct||0) >= 0 ? "color:#00d4a1" : "color:#ff4757";
-        tableHTML += `<tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
-            <td style="padding:.6rem .8rem;color:#eeeef5;"><strong>${r.acao||""}</strong></td>
-            <td style="padding:.6rem .8rem;color:#eeeef5;">${r.total_gain||0}</td>
-            <td style="padding:.6rem .8rem;color:#eeeef5;">${fmtPct(r.pct_gain)}</td>
-            <td style="padding:.6rem .8rem;color:#eeeef5;">${r.total_loss||0}</td>
-            <td style="padding:.6rem .8rem;color:#eeeef5;">${fmtPct(r.pct_loss)}</td>
-            <td style="padding:.6rem .8rem;color:#eeeef5;">${r.total_trades||0}</td>
-            <td style="padding:.6rem .8rem;${cls};font-weight:700;">${fmtPct(r.resultado_pct)}</td>
-            <td style="padding:.6rem .8rem;color:#eeeef5;">${fmtPct(r.max_drawdown_pct)}</td>
-            <td style="padding:.6rem .8rem;color:#eeeef5;">${fmtPct(r.ganho_maximo_pct)}</td>
-            <td style="padding:.6rem .8rem;color:#eeeef5;">${fmtPct(r.ganho_medio_pct)}</td>
-            <td style="padding:.6rem .8rem;color:#eeeef5;">${fmtVol(r.volume_medio)}</td>
+    rows.forEach(function(r) {
+        const cls = (r.resultado_pct || 0) >= 0 ? "color:#00d4a1" : "color:#ff4757";
+        tableHTML += `<tr>
+            <td style="${tdStyle}"><strong>${r.acao || ""}</strong></td>
+            <td style="${tdStyle}">${r.total_gain || 0}</td>
+            <td style="${tdStyle}">${fmtPct(r.pct_gain)}</td>
+            <td style="${tdStyle}">${r.total_loss || 0}</td>
+            <td style="${tdStyle}">${fmtPct(r.pct_loss)}</td>
+            <td style="${tdStyle}">${r.total_trades || 0}</td>
+            <td style="${tdStyle};${cls};font-weight:700;">${fmtPct(r.resultado_pct)}</td>
+            <td style="${tdStyle}">${fmtPct(r.max_drawdown_pct)}</td>
+            <td style="${tdStyle}">${fmtPct(r.ganho_maximo_pct)}</td>
+            <td style="${tdStyle}">${fmtPct(r.ganho_medio_pct)}</td>
+            <td style="${tdStyle}">${fmtVol(r.volume_medio)}</td>
         </tr>`;
     });
 
@@ -904,50 +922,22 @@ function displayResults(containerId, tableId, result) {
 
     makeSortable(tableId);
 }
-    // Summary footer
-    const totalTrades = rows.reduce((s,r) => s + (r.total_trades||0), 0);
-    const avgResult = rows.length > 0 ? rows.reduce((s,r) => s + (r.resultado_pct||0), 0) / rows.length : 0;
-    const bestResult = rows.length > 0 ? Math.max(...rows.map(r => r.resultado_pct||0)) : 0;
-    const worstResult = rows.length > 0 ? Math.min(...rows.map(r => r.resultado_pct||0)) : 0;
-
-    let summaryHTML = `<div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:.8rem;padding:.8rem;background:rgba(18,18,48,0.55);border:1px solid rgba(255,255,255,0.06);border-radius:12px;">
-        <div style="flex:1;min-width:120px;text-align:center;padding:.5rem;">
-            <div style="font-size:.7rem;color:#8888aa;text-transform:uppercase;">Ativos Testados</div>
-            <div style="font-size:1.2rem;font-weight:700;color:#00d4a1;">${rows.length}</div>
-        </div>
-        <div style="flex:1;min-width:120px;text-align:center;padding:.5rem;">
-            <div style="font-size:.7rem;color:#8888aa;text-transform:uppercase;">Total Trades</div>
-            <div style="font-size:1.2rem;font-weight:700;color:#4facfe;">${totalTrades}</div>
-        </div>
-        <div style="flex:1;min-width:120px;text-align:center;padding:.5rem;">
-            <div style="font-size:.7rem;color:#8888aa;text-transform:uppercase;">Média Resultado</div>
-            <div style="font-size:1.2rem;font-weight:700;color:${avgResult >= 0 ? '#00d4a1' : '#ff4757'};">${fmtPct(avgResult)}</div>
-        </div>
-        <div style="flex:1;min-width:120px;text-align:center;padding:.5rem;">
-            <div style="font-size:.7rem;color:#8888aa;text-transform:uppercase;">Melhor</div>
-            <div style="font-size:1.2rem;font-weight:700;color:#00d4a1;">${fmtPct(bestResult)}</div>
-        </div>
-        <div style="flex:1;min-width:120px;text-align:center;padding:.5rem;">
-            <div style="font-size:.7rem;color:#8888aa;text-transform:uppercase;">Pior</div>
-            <div style="font-size:1.2rem;font-weight:700;color:#ff4757;">${fmtPct(worstResult)}</div>
-        </div>
-    </div>`;
-
-    container.innerHTML = `<div class="results-scroll-wrapper" style="overflow-x:auto;overflow-y:visible;width:100%;display:block;-webkit-overflow-scrolling:touch;padding-bottom:4px;">${tableHTML}</div>`;
-
-    makeSortable(tableId);
 
 // ============================================================
 // INITIALIZATION
 // ============================================================
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", function() {
     // Nav links
-    document.querySelectorAll(".nav-link[data-page]").forEach(link => {
-        link.addEventListener("click", (e) => {
+    document.querySelectorAll(".nav-link[data-page]").forEach(function(link) {
+        link.addEventListener("click", function(e) {
             e.preventDefault();
-            navigate(link.dataset.page);
+            navigate(link.getAttribute("data-page"));
         });
     });
+
+    // Start on daily page
+    navigate("daily");
+});
 
     // Market status
     const dot = document.getElementById("marketDot");
