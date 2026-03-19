@@ -448,67 +448,116 @@
 
 <script>
 (function() {
-    var sidebar = document.getElementById('sidebar');
-    var mainContent = document.getElementById('mainContent');
-    var collapseBtn = document.getElementById('sidebarCollapseBtn');
-    var menuToggle = document.getElementById('menuToggle');
-    var sidebarClose = document.getElementById('sidebarClose');
-    var overlay = document.getElementById('sidebarOverlay');
+    var sidebar   = document.getElementById('sidebar');
+    var mainCont  = document.getElementById('mainContent');
+    var collapse  = document.getElementById('sidebarCollapseBtn');
+    var toggle    = document.getElementById('menuToggle');
+    var closeBtn  = document.getElementById('sidebarClose');
+    var overlay   = document.getElementById('sidebarOverlay');
 
     function isMobile() { return window.innerWidth <= 768; }
 
+    function openMobileSidebar() {
+        if (!sidebar || !overlay) return;
+        sidebar.classList.add('mobile-open');
+        overlay.classList.add('active');
+        // Força o browser a respeitar o z-index
+        sidebar.style.zIndex = '1001';
+        overlay.style.zIndex = '1000';
+    }
+
     function closeMobileSidebar() {
-        if (sidebar) { sidebar.classList.remove('mobile-open'); sidebar.classList.remove('open'); }
-        if (overlay) overlay.classList.remove('active');
+        if (!sidebar || !overlay) return;
+        sidebar.classList.remove('mobile-open');
+        sidebar.classList.remove('open');
+        overlay.classList.remove('active');
     }
 
-    if (collapseBtn) {
-        collapseBtn.addEventListener('click', function() {
-            if (isMobile()) return;
-            sidebar.classList.toggle('collapsed');
-            mainContent.classList.toggle('sidebar-collapsed');
+    // ─── Botão hamburger (☰) abre sidebar no mobile ───
+    if (toggle) {
+        toggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openMobileSidebar();
+        });
+        // Também trata touch
+        toggle.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openMobileSidebar();
         });
     }
 
-    if (menuToggle) {
-        menuToggle.addEventListener('click', function() {
-            sidebar.classList.add('mobile-open');
-            overlay.classList.add('active');
+    // ─── Botão X fecha sidebar no mobile ───
+    if (closeBtn) {
+        closeBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            closeMobileSidebar();
+        });
+        closeBtn.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            closeMobileSidebar();
         });
     }
 
-    if (sidebarClose) {
-        sidebarClose.addEventListener('click', closeMobileSidebar);
-    }
-
+    // ─── Overlay escuro fecha sidebar ───
     if (overlay) {
         overlay.addEventListener('click', closeMobileSidebar);
+        overlay.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            closeMobileSidebar();
+        });
     }
 
+    // ─── Collapse desktop ───
+    if (collapse) {
+        collapse.addEventListener('click', function() {
+            if (isMobile()) return;
+            if (sidebar) sidebar.classList.toggle('collapsed');
+            if (mainCont) mainCont.classList.toggle('sidebar-collapsed');
+        });
+    }
+
+    // ─── Resize: limpa estado mobile ───
     window.addEventListener('resize', function() {
         if (!isMobile()) closeMobileSidebar();
     });
 
+    // ─── Market selectors (custom tickers) ───
     ['daily', 'intra', 'bmf'].forEach(function(prefix) {
         var marketSel = document.getElementById(prefix + '-market');
         var tickersWrap = document.getElementById(prefix + '-tickers-wrap');
         if (marketSel && tickersWrap) {
             marketSel.addEventListener('change', function() {
-                tickersWrap.style.display = marketSel.value === 'custom' ? 'block' : 'none';
+                tickersWrap.style.display = (marketSel.value === 'custom') ? 'block' : 'none';
             });
         }
     });
 
+    // ─── Nav links: navegar e fechar sidebar ───
     document.querySelectorAll('.nav-link[data-page]').forEach(function(link) {
         link.addEventListener('click', function(e) {
             e.preventDefault();
             var page = this.getAttribute('data-page');
-            if (page && typeof navigate === 'function') navigate(page);
+            if (page && typeof navigate === 'function') {
+                navigate(page);
+            }
+            closeMobileSidebar();
+        });
+        link.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            var page = this.getAttribute('data-page');
+            if (page && typeof navigate === 'function') {
+                navigate(page);
+            }
             closeMobileSidebar();
         });
     });
 
-    if (typeof navigate === 'function') navigate('daily');
+    // ─── Init: navega para daily ───
+    if (typeof navigate === 'function') {
+        navigate('daily');
+    }
 })();
 </script>
 
