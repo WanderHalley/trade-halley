@@ -55,9 +55,8 @@ async function brapiGet(endpoint, params = {}) {
     } catch (e) { console.error(`BRAPI ${endpoint}:`, e); return null; }
 }
 
-// ─── Fetch ALL tickers from BRAPI for a given type ───
+// ─── Fetch ALL tickers from BRAPI for a given type (usado apenas em Config/Download) ───
 async function fetchAllBrapiTickers(type) {
-    // type: "stock" | "fund" | "bdr"
     let tickers = [];
     let page = 1;
     let hasMore = true;
@@ -67,14 +66,13 @@ async function fetchAllBrapiTickers(type) {
         data.stocks.forEach(s => tickers.push(s.stock));
         hasMore = data.hasNextPage || false;
         page++;
-        if (page > 50) break; // safety limit
+        if (page > 50) break;
     }
     return tickers;
 }
 
 // ─── Navigation ───
 let currentPage = "dashboard";
-let _cachedBrapiTickers = {};
 
 function navigate(page) {
     currentPage = page;
@@ -151,7 +149,10 @@ function makeSortable(tableId) {
         arrow.style.opacity = "0.4";
         arrow.textContent = "⇅";
         th.appendChild(arrow);
-        th.addEventListener("click", () => sortTable(tableId, colIdx));
+        // Remove old listeners by cloning
+        const newTh = th.cloneNode(true);
+        th.parentNode.replaceChild(newTh, th);
+        newTh.addEventListener("click", () => sortTable(tableId, colIdx));
     });
 }
 
@@ -243,7 +244,7 @@ async function loadDashboard() {
 }
 
 // ============================================================
-// STRATEGIES PAGE (sem coluna ID)
+// STRATEGIES PAGE
 // ============================================================
 async function loadStrategiesPage() {
     const data = await apiGet("/strategies/all");
@@ -360,17 +361,14 @@ async function showConfigPanel() {
     document.getElementById("config-login-screen").style.display = "none";
     document.getElementById("config-panel").style.display = "block";
 
-    // Load saved token
     const tokenInput = document.getElementById("config-brapi-token");
     if (tokenInput) tokenInput.value = getBrapiToken();
 
-    // Set default dates
     const sd = document.getElementById("config-start-date");
     const ed = document.getElementById("config-end-date");
     if (sd && !sd.value) { const d = new Date(); d.setFullYear(d.getFullYear()-1); sd.value = d.toISOString().split("T")[0]; }
     if (ed && !ed.value) ed.value = getTodayStr();
 
-    // Load stats
     const stats = await apiGet("/storage/stats");
     const statsDiv = document.getElementById("config-stats");
     if (statsDiv && stats) {
@@ -385,7 +383,6 @@ async function showConfigPanel() {
         </div>`;
     }
 
-    // Load assets table from Supabase
     loadConfigAssetsTable();
 }
 
@@ -417,7 +414,6 @@ async function loadConfigAssetsTable() {
         const dailyRec = a.daily_records || 0;
         const intraRec = a.intraday_records || 0;
 
-        // Show daily row if has daily data
         if (dailyRec > 0) {
             html += `<tr>
                 <td><strong>${a.ticker||""}</strong></td>
@@ -429,7 +425,6 @@ async function loadConfigAssetsTable() {
                 <td>${dailyRec.toLocaleString("pt-BR")}</td>
             </tr>`;
         }
-        // Show intraday row if has intraday data
         if (intraRec > 0) {
             html += `<tr>
                 <td><strong>${a.ticker||""}</strong></td>
@@ -441,7 +436,6 @@ async function loadConfigAssetsTable() {
                 <td>${intraRec.toLocaleString("pt-BR")}</td>
             </tr>`;
         }
-        // If neither, show basic row
         if (dailyRec === 0 && intraRec === 0) {
             html += `<tr>
                 <td><strong>${a.ticker||""}</strong></td>
@@ -489,7 +483,7 @@ async function changeConfigPin() {
     }
 }
 
-// ─── Download All Assets by Type ───
+// ─── Download All Assets by Type (continua usando BRAPI para listar) ───
 async function downloadAllAssets() {
     const pin = getStoredPin();
     if (!pin) { alert("PIN não encontrado. Faça login novamente."); return; }
@@ -519,7 +513,6 @@ async function downloadAllAssets() {
 
         tickers = await fetchAllBrapiTickers(brapiType);
 
-        // Filter by asset type
         if (assetType === "etf") {
             tickers = tickers.filter(t => t.endsWith("11"));
         } else if (assetType === "stock") {
@@ -691,24 +684,19 @@ async function runDailyBacktest() {
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...'; }
 
     try {
-        const body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction, variation_pct: variationPct, start_date: startDate || null, end_date: endDate || null };
+        const body = {
+            entry_strategy: entryStrategy,
+            exit_strategy: exitStrategy,
+            direction,
+            variation_pct: variationPct,
+            start_date: startDate || null,
+            end_date: endDate || null
+        };
 
         if (tickersInput) {
             body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
-        } else if (market === "b3" || market === "" || market === undefined) {
-            if (!_cachedBrapiTickers["stock"]) {
-                const allTickers = await fetchAllBrapiTickers("stock");
-                const stockTickers = allTickers.filter(t => !t.endsWith("11") && !t.endsWith("F"));
-                if (stockTickers.length > 0) _cachedBrapiTickers["stock"] = stockTickers;
-            }
-            if (_cachedBrapiTickers["stock"] && _cachedBrapiTickers["stock"].length > 0) {
-                body.tickers = _cachedBrapiTickers["stock"];
-            } else {
-                body.market = "b3";
-            }
-        } else if (market !== "custom") {
-            body.market = market;
         } else {
+            // "B3 — Todos" ou default: envia market para o backend resolver via Supabase
             body.market = "b3";
         }
 
@@ -756,24 +744,22 @@ async function runIntradayBacktest() {
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...'; }
 
     try {
-        const body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction, variation_pct: variationPct, hour_start: hourStart, hour_end: hourEnd, period: "3mo", start_date: startDate || null, end_date: endDate || null };
+        const body = {
+            entry_strategy: entryStrategy,
+            exit_strategy: exitStrategy,
+            direction,
+            variation_pct: variationPct,
+            hour_start: hourStart,
+            hour_end: hourEnd,
+            period: "3mo",
+            start_date: startDate || null,
+            end_date: endDate || null
+        };
 
         if (tickersInput) {
             body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
-        } else if (market === "b3" || market === "" || market === undefined) {
-            if (!_cachedBrapiTickers["stock"]) {
-                const allTickers = await fetchAllBrapiTickers("stock");
-                const stockTickers = allTickers.filter(t => !t.endsWith("11") && !t.endsWith("F"));
-                if (stockTickers.length > 0) _cachedBrapiTickers["stock"] = stockTickers;
-            }
-            if (_cachedBrapiTickers["stock"] && _cachedBrapiTickers["stock"].length > 0) {
-                body.tickers = _cachedBrapiTickers["stock"];
-            } else {
-                body.market = "b3";
-            }
-        } else if (market !== "custom") {
-            body.market = market;
         } else {
+            // "B3 — Todos": envia market para o backend resolver via Supabase
             body.market = "b3";
         }
 
@@ -820,9 +806,23 @@ async function runBmfIntradayBacktest() {
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...'; }
 
     try {
-        const body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction, variation_pct: variationPct, hour_start: hourStart, hour_end: hourEnd, period: "3mo", start_date: startDate || null, end_date: endDate || null };
-        if (tickersInput) body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
-        else body.market = "bmf";
+        const body = {
+            entry_strategy: entryStrategy,
+            exit_strategy: exitStrategy,
+            direction,
+            variation_pct: variationPct,
+            hour_start: hourStart,
+            hour_end: hourEnd,
+            period: "3mo",
+            start_date: startDate || null,
+            end_date: endDate || null
+        };
+
+        if (tickersInput) {
+            body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
+        } else {
+            body.market = "bmf";
+        }
 
         const result = await apiPost("/backtest/intraday", body);
         if (!result) { alert("Erro ao executar backtest BMF."); return; }
@@ -852,89 +852,108 @@ function displayResults(containerId, tableId, result) {
 
     if (rows.length === 0) { container.innerHTML = '<p class="text-muted" style="padding:1rem">Nenhum resultado encontrado.</p>'; return; }
 
-    // Build table HTML
+    // Inject scoped scrollbar style
+    const styleId = tableId + "-scroll-style";
+    let styleEl = document.getElementById(styleId);
+    if (!styleEl) {
+        styleEl = document.createElement("style");
+        styleEl.id = styleId;
+        document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = `
+        #${containerId} .results-scroll-wrapper::-webkit-scrollbar { height: 12px; }
+        #${containerId} .results-scroll-wrapper::-webkit-scrollbar-track { background: #0a0a1a; border-radius: 6px; }
+        #${containerId} .results-scroll-wrapper::-webkit-scrollbar-thumb { background: #00d4a1; border-radius: 6px; }
+        #${containerId} .results-scroll-wrapper::-webkit-scrollbar-thumb:hover { background: #00b88a; }
+    `;
+
     let tableHTML = `<table id="${tableId}" style="min-width:1400px;width:max-content;white-space:nowrap;table-layout:auto;border-collapse:collapse;font-size:.83rem;">
         <thead><tr>
-            <th>AÇÃO</th><th>TOTAL GAIN</th><th>% GAIN</th><th>TOTAL LOSS</th><th>% LOSS</th>
-            <th>TOTAL TRADES</th><th>RESULTADO %</th><th>MAX DRAWDOWN %</th>
-            <th>GANHO MÁXIMO %</th><th>GANHO MÉDIO %</th><th>VOLUME MÉDIO</th>
+            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">AÇÃO</th>
+            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">TOTAL GAIN</th>
+            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">% GAIN</th>
+            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">TOTAL LOSS</th>
+            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">% LOSS</th>
+            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">TOTAL TRADES</th>
+            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">RESULTADO %</th>
+            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">MAX DRAWDOWN %</th>
+            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">GANHO MÁXIMO %</th>
+            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">GANHO MÉDIO %</th>
+            <th style="padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">VOLUME MÉDIO</th>
         </tr></thead><tbody>`;
 
     rows.forEach(r => {
-        const cls = (r.resultado_pct||0) >= 0 ? "text-success" : "text-danger";
-        tableHTML += `<tr>
-            <td><strong>${r.acao||""}</strong></td>
-            <td>${r.total_gain||0}</td><td>${fmtPct(r.pct_gain)}</td>
-            <td>${r.total_loss||0}</td><td>${fmtPct(r.pct_loss)}</td>
-            <td>${r.total_trades||0}</td>
-            <td class="${cls}">${fmtPct(r.resultado_pct)}</td>
-            <td>${fmtPct(r.max_drawdown_pct)}</td>
-            <td>${fmtPct(r.ganho_maximo_pct)}</td>
-            <td>${fmtPct(r.ganho_medio_pct)}</td>
-            <td>${fmtVol(r.volume_medio)}</td>
+        const cls = (r.resultado_pct||0) >= 0 ? "color:#00d4a1" : "color:#ff4757";
+        tableHTML += `<tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+            <td style="padding:.6rem .8rem;color:#eeeef5;"><strong>${r.acao||""}</strong></td>
+            <td style="padding:.6rem .8rem;color:#eeeef5;">${r.total_gain||0}</td>
+            <td style="padding:.6rem .8rem;color:#eeeef5;">${fmtPct(r.pct_gain)}</td>
+            <td style="padding:.6rem .8rem;color:#eeeef5;">${r.total_loss||0}</td>
+            <td style="padding:.6rem .8rem;color:#eeeef5;">${fmtPct(r.pct_loss)}</td>
+            <td style="padding:.6rem .8rem;color:#eeeef5;">${r.total_trades||0}</td>
+            <td style="padding:.6rem .8rem;${cls};font-weight:700;">${fmtPct(r.resultado_pct)}</td>
+            <td style="padding:.6rem .8rem;color:#eeeef5;">${fmtPct(r.max_drawdown_pct)}</td>
+            <td style="padding:.6rem .8rem;color:#eeeef5;">${fmtPct(r.ganho_maximo_pct)}</td>
+            <td style="padding:.6rem .8rem;color:#eeeef5;">${fmtPct(r.ganho_medio_pct)}</td>
+            <td style="padding:.6rem .8rem;color:#eeeef5;">${fmtVol(r.volume_medio)}</td>
         </tr>`;
     });
+
     tableHTML += `</tbody></table>`;
 
-    // Create elements via DOM (not innerHTML) to guarantee styles
-    container.innerHTML = '';
+    // Summary footer
+    const totalTrades = rows.reduce((s,r) => s + (r.total_trades||0), 0);
+    const avgResult = rows.length > 0 ? rows.reduce((s,r) => s + (r.resultado_pct||0), 0) / rows.length : 0;
+    const bestResult = rows.length > 0 ? Math.max(...rows.map(r => r.resultado_pct||0)) : 0;
+    const worstResult = rows.length > 0 ? Math.min(...rows.map(r => r.resultado_pct||0)) : 0;
 
-    // Card wrapper
-    const card = document.createElement('div');
-    card.style.cssText = 'background:rgba(18,18,48,0.55);border:1px solid rgba(255,255,255,0.06);border-radius:16px;margin-top:1.5rem;margin-bottom:1.2rem;';
+    let summaryHTML = `<div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:.8rem;padding:.8rem;background:rgba(18,18,48,0.55);border:1px solid rgba(255,255,255,0.06);border-radius:12px;">
+        <div style="flex:1;min-width:120px;text-align:center;padding:.5rem;">
+            <div style="font-size:.7rem;color:#8888aa;text-transform:uppercase;">Ativos Testados</div>
+            <div style="font-size:1.2rem;font-weight:700;color:#00d4a1;">${rows.length}</div>
+        </div>
+        <div style="flex:1;min-width:120px;text-align:center;padding:.5rem;">
+            <div style="font-size:.7rem;color:#8888aa;text-transform:uppercase;">Total Trades</div>
+            <div style="font-size:1.2rem;font-weight:700;color:#4facfe;">${totalTrades}</div>
+        </div>
+        <div style="flex:1;min-width:120px;text-align:center;padding:.5rem;">
+            <div style="font-size:.7rem;color:#8888aa;text-transform:uppercase;">Média Resultado</div>
+            <div style="font-size:1.2rem;font-weight:700;color:${avgResult >= 0 ? '#00d4a1' : '#ff4757'};">${fmtPct(avgResult)}</div>
+        </div>
+        <div style="flex:1;min-width:120px;text-align:center;padding:.5rem;">
+            <div style="font-size:.7rem;color:#8888aa;text-transform:uppercase;">Melhor</div>
+            <div style="font-size:1.2rem;font-weight:700;color:#00d4a1;">${fmtPct(bestResult)}</div>
+        </div>
+        <div style="flex:1;min-width:120px;text-align:center;padding:.5rem;">
+            <div style="font-size:.7rem;color:#8888aa;text-transform:uppercase;">Pior</div>
+            <div style="font-size:1.2rem;font-weight:700;color:#ff4757;">${fmtPct(worstResult)}</div>
+        </div>
+    </div>`;
 
-    // Header
-    const header = document.createElement('div');
-    header.style.cssText = 'padding:1rem 1.3rem;border-bottom:1px solid rgba(255,255,255,0.08);font-size:.9rem;font-weight:600;color:#eeeef5;display:flex;align-items:center;gap:.5rem;background:rgba(255,255,255,0.02);border-radius:16px 16px 0 0;';
-    header.innerHTML = `<i class="fas fa-table" style="color:#00d4a1;font-size:.85rem;"></i> Resultados (${rows.length} ativo${rows.length>1?"s":""})`;
-    card.appendChild(header);
-
-    // Scroll wrapper — THIS is the key element
-    const scrollWrapper = document.createElement('div');
-    scrollWrapper.style.cssText = 'overflow-x:scroll;overflow-y:visible;-webkit-overflow-scrolling:touch;display:block;padding-bottom:2px;width:0;min-width:100%;max-width:calc(100vw - 300px);';
-    scrollWrapper.innerHTML = tableHTML;
-    card.appendChild(scrollWrapper);
-
-    container.appendChild(card);
-
-    // Style thead/tbody after insertion
-    const tbl = document.getElementById(tableId);
-    if (tbl) {
-        tbl.querySelectorAll('thead th').forEach(th => {
-            th.style.cssText = 'padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;position:sticky;top:0;cursor:pointer;user-select:none;';
-        });
-        tbl.querySelectorAll('tbody td').forEach(td => {
-            td.style.cssText = 'padding:.6rem .8rem;border-bottom:1px solid rgba(255,255,255,0.03);color:#eeeef5;vertical-align:middle;white-space:nowrap;';
-        });
-        tbl.querySelectorAll('tbody tr').forEach(tr => {
-            tr.addEventListener('mouseenter', () => tr.style.background = 'rgba(0,212,161,0.04)');
-            tr.addEventListener('mouseleave', () => tr.style.background = '');
-        });
-    }
-
-    // Force scrollbar visibility
-    const styleId = 'results-scroll-style';
-    if (!document.getElementById(styleId)) {
-        const s = document.createElement('style');
-        s.id = styleId;
-        s.textContent = `
-            #${containerId} > div > div:nth-child(2)::-webkit-scrollbar { height: 12px !important; }
-            #${containerId} > div > div:nth-child(2)::-webkit-scrollbar-track { background: #0c0c1e !important; border-radius: 6px !important; }
-            #${containerId} > div > div:nth-child(2)::-webkit-scrollbar-thumb { background: #00d4a1 !important; border-radius: 6px !important; }
-            #${containerId} > div > div:nth-child(2)::-webkit-scrollbar-thumb:hover { background: #00b88a !important; }
-        `;
-        document.head.appendChild(s);
-    }
+    container.innerHTML = `<div class="results-scroll-wrapper" style="overflow-x:auto;overflow-y:visible;width:100%;display:block;-webkit-overflow-scrolling:touch;padding-bottom:4px;">${tableHTML}</div>${summaryHTML}`;
 
     makeSortable(tableId);
 }
 
 // ============================================================
-// INIT
+// INITIALIZATION
 // ============================================================
 document.addEventListener("DOMContentLoaded", () => {
+    // Nav links
     document.querySelectorAll(".nav-link[data-page]").forEach(link => {
-        link.addEventListener("click", (e) => { e.preventDefault(); navigate(link.dataset.page); });
+        link.addEventListener("click", (e) => {
+            e.preventDefault();
+            navigate(link.dataset.page);
+        });
     });
+
+    // Market status
+    const dot = document.getElementById("marketDot");
+    if (dot) {
+        const isOpen = Utils.isMarketOpen();
+        dot.style.background = isOpen ? "#00d4a1" : "#ff4757";
+    }
+
+    // Load dashboard
     navigate("dashboard");
 });
