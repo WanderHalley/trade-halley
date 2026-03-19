@@ -74,6 +74,7 @@ async function fetchAllBrapiTickers(type) {
 
 // ─── Navigation ───
 let currentPage = "dashboard";
+let _cachedBrapiTickers = {};
 
 function navigate(page) {
     currentPage = page;
@@ -687,38 +688,39 @@ async function runDailyBacktest() {
     if (!entryStrategy || !exitStrategy) { alert("Selecione as estratégias de entrada e saída."); return; }
 
     const btn = document.getElementById("daily-run-btn");
-    const origHTML = btn?.innerHTML;
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...'; }
 
-    const body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction, variation_pct: variationPct, start_date: startDate || null, end_date: endDate || null };
+    try {
+        const body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction, variation_pct: variationPct, start_date: startDate || null, end_date: endDate || null };
 
-    if (tickersInput) {
-        body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
-    } else if (market === "b3" || market === "" || market === undefined) {
-        // Fetch ALL B3 stock tickers from BRAPI instead of using the hardcoded 30
-        try {
-            const allTickers = await fetchAllBrapiTickers("stock");
-            // Filter out ETFs (ending in 11) and fractional (ending in F)
-            const stockTickers = allTickers.filter(t => !t.endsWith("11") && !t.endsWith("F"));
-            if (stockTickers.length > 0) {
-                body.tickers = stockTickers;
-            } else {
-                body.market = "b3"; // fallback
+        if (tickersInput) {
+            body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
+        } else if (market === "b3" || market === "" || market === undefined) {
+            if (!_cachedBrapiTickers["stock"]) {
+                const allTickers = await fetchAllBrapiTickers("stock");
+                const stockTickers = allTickers.filter(t => !t.endsWith("11") && !t.endsWith("F"));
+                if (stockTickers.length > 0) _cachedBrapiTickers["stock"] = stockTickers;
             }
-        } catch (e) {
-            console.error("Failed to fetch all tickers, falling back to market=b3:", e);
+            if (_cachedBrapiTickers["stock"] && _cachedBrapiTickers["stock"].length > 0) {
+                body.tickers = _cachedBrapiTickers["stock"];
+            } else {
+                body.market = "b3";
+            }
+        } else if (market !== "custom") {
+            body.market = market;
+        } else {
             body.market = "b3";
         }
-    } else if (market !== "custom") {
-        body.market = market;
-    } else {
-        body.market = "b3";
-    }
 
-    const result = await apiPost("/backtest/daily", body);
-    if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
-    if (!result) { alert("Erro ao executar backtest."); return; }
-    displayResults("daily-results", "daily-results-table", result);
+        const result = await apiPost("/backtest/daily", body);
+        if (!result) { alert("Erro ao executar backtest."); return; }
+        displayResults("daily-results", "daily-results-table", result);
+    } catch (e) {
+        console.error("runDailyBacktest error:", e);
+        alert("Erro ao executar backtest: " + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play"></i> Executar Back-teste'; }
+    }
 }
 
 // ============================================================
@@ -751,36 +753,39 @@ async function runIntradayBacktest() {
     if (!entryStrategy || !exitStrategy) { alert("Selecione as estratégias."); return; }
 
     const btn = document.getElementById("intra-run-btn");
-    const origHTML = btn?.innerHTML;
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...'; }
 
-    const body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction, variation_pct: variationPct, hour_start: hourStart, hour_end: hourEnd, period: "3mo", start_date: startDate || null, end_date: endDate || null };
+    try {
+        const body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction, variation_pct: variationPct, hour_start: hourStart, hour_end: hourEnd, period: "3mo", start_date: startDate || null, end_date: endDate || null };
 
-    if (tickersInput) {
-        body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
-    } else if (market === "b3" || market === "" || market === undefined) {
-        try {
-            const allTickers = await fetchAllBrapiTickers("stock");
-            const stockTickers = allTickers.filter(t => !t.endsWith("11") && !t.endsWith("F"));
-            if (stockTickers.length > 0) {
-                body.tickers = stockTickers;
+        if (tickersInput) {
+            body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
+        } else if (market === "b3" || market === "" || market === undefined) {
+            if (!_cachedBrapiTickers["stock"]) {
+                const allTickers = await fetchAllBrapiTickers("stock");
+                const stockTickers = allTickers.filter(t => !t.endsWith("11") && !t.endsWith("F"));
+                if (stockTickers.length > 0) _cachedBrapiTickers["stock"] = stockTickers;
+            }
+            if (_cachedBrapiTickers["stock"] && _cachedBrapiTickers["stock"].length > 0) {
+                body.tickers = _cachedBrapiTickers["stock"];
             } else {
                 body.market = "b3";
             }
-        } catch (e) {
-            console.error("Failed to fetch all tickers:", e);
+        } else if (market !== "custom") {
+            body.market = market;
+        } else {
             body.market = "b3";
         }
-    } else if (market !== "custom") {
-        body.market = market;
-    } else {
-        body.market = "b3";
-    }
 
-    const result = await apiPost("/backtest/intraday", body);
-    if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
-    if (!result) { alert("Erro ao executar backtest intraday."); return; }
-    displayResults("intra-results", "intra-results-table", result);
+        const result = await apiPost("/backtest/intraday", body);
+        if (!result) { alert("Erro ao executar backtest intraday."); return; }
+        displayResults("intra-results", "intra-results-table", result);
+    } catch (e) {
+        console.error("runIntradayBacktest error:", e);
+        alert("Erro ao executar backtest: " + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play"></i> Executar Back-teste Intraday B3'; }
+    }
 }
 
 // ============================================================
@@ -812,17 +817,22 @@ async function runBmfIntradayBacktest() {
     if (!entryStrategy || !exitStrategy) { alert("Selecione as estratégias."); return; }
 
     const btn = document.getElementById("bmf-run-btn");
-    const origHTML = btn?.innerHTML;
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...'; }
 
-    const body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction, variation_pct: variationPct, hour_start: hourStart, hour_end: hourEnd, period: "3mo", start_date: startDate || null, end_date: endDate || null };
-    if (tickersInput) body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
-    else body.market = "bmf";
+    try {
+        const body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction, variation_pct: variationPct, hour_start: hourStart, hour_end: hourEnd, period: "3mo", start_date: startDate || null, end_date: endDate || null };
+        if (tickersInput) body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
+        else body.market = "bmf";
 
-    const result = await apiPost("/backtest/intraday", body);
-    if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
-    if (!result) { alert("Erro ao executar backtest BMF."); return; }
-    displayResults("bmf-results", "bmf-results-table", result);
+        const result = await apiPost("/backtest/intraday", body);
+        if (!result) { alert("Erro ao executar backtest BMF."); return; }
+        displayResults("bmf-results", "bmf-results-table", result);
+    } catch (e) {
+        console.error("runBmfIntradayBacktest error:", e);
+        alert("Erro ao executar backtest: " + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play"></i> Executar Back-teste BMF Intraday'; }
+    }
 }
 
 // ============================================================
