@@ -12,16 +12,11 @@
 </head>
 <body>
 
-<!-- Toast Container -->
 <div class="toast-container" id="toastContainer"></div>
-
-<!-- Overlay for mobile sidebar -->
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-<!-- ════════════════════════════════════════ APP LAYOUT ════════════════════════════════════════ -->
 <div class="app-layout">
 
-    <!-- ─── Sidebar ─── -->
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <div class="logo">
@@ -37,14 +32,8 @@
             <button class="sidebar-close" id="sidebarClose"><i class="fas fa-times"></i></button>
         </div>
         <div class="sidebar-nav">
-            <div class="nav-section-label"><span>Principal</span></div>
-            <a href="#" class="nav-link active" data-page="daily">
-            <i class="fas fa-calendar-day"></i> <span>B3 Diário</span>
-            </a>
-
-
             <div class="nav-section-label"><span>Back-tests</span></div>
-            <a href="#" class="nav-link" data-page="daily">
+            <a href="#" class="nav-link active" data-page="daily">
                 <i class="fas fa-calendar-day"></i> <span>B3 Diário</span>
             </a>
             <a href="#" class="nav-link" data-page="intraday">
@@ -73,7 +62,6 @@
         </div>
     </nav>
 
-    <!-- ─── Main Content ─── -->
     <div class="main-content" id="mainContent">
         <div class="main-header">
             <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
@@ -83,16 +71,14 @@
             </div>
         </div>
 
-        <!-- ==================== B3 DIÁRIO ==================== -->
+        <!-- B3 DIÁRIO -->
         <div class="page-content" id="page-daily">
             <div class="page-title">
                 <h2><i class="fas fa-calendar-day"></i> Back-teste B3 — Diário</h2>
                 <p>Timeframe diário para ações da B3</p>
             </div>
             <div class="glass-card">
-                <div class="card-header-custom">
-                    <i class="fas fa-sliders-h"></i> Configuração do Back-teste
-                </div>
+                <div class="card-header-custom"><i class="fas fa-sliders-h"></i> Configuração do Back-teste</div>
                 <div class="card-body-custom">
                     <div class="form-row">
                         <div class="form-group">
@@ -107,22 +93,16 @@
                             <input class="form-input" id="daily-tickers" placeholder="PETR4,VALE3,ITUB4">
                         </div>
                     </div>
-
                     <div class="form-row">
                         <div class="form-group">
                             <label>Direção da Operação</label>
                             <div class="direction-buttons">
-                                <button type="button" class="btn-dir btn-dir-buy active-dir" id="daily-btn-compra">
-                                    <i class="fas fa-arrow-up"></i> COMPRA
-                                </button>
-                                <button type="button" class="btn-dir btn-dir-sell" id="daily-btn-venda">
-                                    <i class="fas fa-arrow-down"></i> VENDA
-                                </button>
+                                <button type="button" class="btn-dir btn-dir-buy active-dir" id="daily-btn-compra"><i class="fas fa-arrow-up"></i> COMPRA</button>
+                                <button type="button" class="btn-dir btn-dir-sell" id="daily-btn-venda"><i class="fas fa-arrow-down"></i> VENDA</button>
                             </div>
                             <input type="hidden" id="daily-direction" value="compra">
                         </div>
                     </div>
-
                     <div class="form-row">
                         <div class="form-group">
                             <label>Operação de Entrada</label>
@@ -133,7 +113,6 @@
                             <select class="form-input" id="daily-exit-strategy"></select>
                         </div>
                     </div>
-
                     <div class="form-row">
                         <div class="form-group" id="daily-variation-div">
                             <label>Variação % (ex: -3 para -3%)</label>
@@ -148,25 +127,20 @@
                             <input type="date" class="form-input" id="daily-end-date">
                         </div>
                     </div>
-
-                    <button class="btn-execute" id="daily-run-btn" onclick="runDailyBacktest()">
-                        <i class="fas fa-play"></i> Executar Back-teste
-                    </button>
+                    <button class="btn-execute" id="daily-run-btn" onclick="runDailyBacktest()"><i class="fas fa-play"></i> Executar Back-teste</button>
                 </div>
             </div>
             <div id="daily-results"></div>
         </div>
 
-        <!-- ==================== B3 INTRADAY ==================== -->
+        <!-- B3 INTRADAY -->
         <div class="page-content d-none" id="page-intraday">
             <div class="page-title">
                 <h2><i class="fas fa-clock"></i> Back-teste B3 — Intraday</h2>
                 <p>Timeframe intraday para ações da B3</p>
             </div>
             <div class="glass-card">
-                <div class="card-header-custom">
-                    <i class="fas fa-sliders-h"></i> Configuração do Back-teste
-                </div>
+                <div class="card-header-custom"><i class="fas fa-sliders-h"></i> Configuração do Back-teste</div>
                 <div class="card-body-custom">
                     <div class="form-row">
                         <div class="form-group">
@@ -181,22 +155,16 @@
                             <input class="form-input" id="intra-tickers" placeholder="PETR4,VALE3">
                         </div>
                     </div>
-
                     <div class="form-row">
                         <div class="form-group">
                             <label>Direção</label>
                             <div class="direction-buttons">
-                                <button type="button" class="btn-dir btn-dir-buy active-dir" id="intra-btn-compra">
-                                    <i class="fas fa-arrow-up"></i> COMPRA
-                                </button>
-                                <button type="button" class="btn-dir btn-dir-sell" id="intra-btn-venda">
-                                    <i class="fas fa-arrow-down"></i> VENDA
-                                </button>
+                                <button type="button" class="btn-dir btn-dir-buy active-dir" id="intra-btn-compra"><i class="fas fa-arrow-up"></i> COMPRA</button>
+                                <button type="button" class="btn-dir btn-dir-sell" id="intra-btn-venda"><i class="fas fa-arrow-down"></i> VENDA</button>
                             </div>
                             <input type="hidden" id="intra-direction" value="compra">
                         </div>
                     </div>
-
                     <div class="form-row">
                         <div class="form-group">
                             <label>Operação de Entrada</label>
@@ -207,7 +175,6 @@
                             <select class="form-input" id="intra-exit-strategy"></select>
                         </div>
                     </div>
-
                     <div class="form-row">
                         <div class="form-group">
                             <label>Variação %</label>
@@ -233,7 +200,6 @@
                             </select>
                         </div>
                     </div>
-
                     <div class="form-row">
                         <div class="form-group">
                             <label>Data Início</label>
@@ -244,25 +210,20 @@
                             <input type="date" class="form-input" id="intra-end-date">
                         </div>
                     </div>
-
-                    <button class="btn-execute" id="intra-run-btn" onclick="runIntradayBacktest()">
-                        <i class="fas fa-play"></i> Executar Back-teste Intraday B3
-                    </button>
+                    <button class="btn-execute" id="intra-run-btn" onclick="runIntradayBacktest()"><i class="fas fa-play"></i> Executar Back-teste Intraday B3</button>
                 </div>
             </div>
             <div id="intra-results"></div>
         </div>
 
-        <!-- ==================== BMF INTRADAY ==================== -->
+        <!-- BMF INTRADAY -->
         <div class="page-content d-none" id="page-bmf-intraday">
             <div class="page-title">
                 <h2><i class="fas fa-exchange-alt"></i> Back-teste BMF — Intraday</h2>
                 <p>Derivativos e futuros BMF</p>
             </div>
             <div class="glass-card">
-                <div class="card-header-custom">
-                    <i class="fas fa-sliders-h"></i> Configuração do Back-teste
-                </div>
+                <div class="card-header-custom"><i class="fas fa-sliders-h"></i> Configuração do Back-teste</div>
                 <div class="card-body-custom">
                     <div class="form-row">
                         <div class="form-group">
@@ -277,22 +238,16 @@
                             <input class="form-input" id="bmf-tickers" placeholder="IBOV_FUT,DOL_FUT">
                         </div>
                     </div>
-
                     <div class="form-row">
                         <div class="form-group">
                             <label>Direção</label>
                             <div class="direction-buttons">
-                                <button type="button" class="btn-dir btn-dir-buy active-dir" id="bmf-btn-compra">
-                                    <i class="fas fa-arrow-up"></i> COMPRA
-                                </button>
-                                <button type="button" class="btn-dir btn-dir-sell" id="bmf-btn-venda">
-                                    <i class="fas fa-arrow-down"></i> VENDA
-                                </button>
+                                <button type="button" class="btn-dir btn-dir-buy active-dir" id="bmf-btn-compra"><i class="fas fa-arrow-up"></i> COMPRA</button>
+                                <button type="button" class="btn-dir btn-dir-sell" id="bmf-btn-venda"><i class="fas fa-arrow-down"></i> VENDA</button>
                             </div>
                             <input type="hidden" id="bmf-direction" value="compra">
                         </div>
                     </div>
-
                     <div class="form-row">
                         <div class="form-group">
                             <label>Operação de Entrada</label>
@@ -303,7 +258,6 @@
                             <select class="form-input" id="bmf-exit-strategy"></select>
                         </div>
                     </div>
-
                     <div class="form-row">
                         <div class="form-group">
                             <label>Variação %</label>
@@ -326,7 +280,6 @@
                             </select>
                         </div>
                     </div>
-
                     <div class="form-row">
                         <div class="form-group">
                             <label>Data Início</label>
@@ -337,16 +290,13 @@
                             <input type="date" class="form-input" id="bmf-end-date">
                         </div>
                     </div>
-
-                    <button class="btn-execute" id="bmf-run-btn" onclick="runBmfIntradayBacktest()">
-                        <i class="fas fa-play"></i> Executar Back-teste BMF Intraday
-                    </button>
+                    <button class="btn-execute" id="bmf-run-btn" onclick="runBmfIntradayBacktest()"><i class="fas fa-play"></i> Executar Back-teste BMF Intraday</button>
                 </div>
             </div>
             <div id="bmf-results"></div>
         </div>
 
-        <!-- ==================== ESTRATÉGIAS ==================== -->
+        <!-- ESTRATÉGIAS -->
         <div class="page-content d-none" id="page-strategies">
             <div class="page-title">
                 <h2><i class="fas fa-list-check"></i> Estratégias Disponíveis</h2>
@@ -357,7 +307,7 @@
             </div>
         </div>
 
-        <!-- ==================== SALVOS ==================== -->
+        <!-- SALVOS -->
         <div class="page-content d-none" id="page-saved">
             <div class="page-title">
                 <h2><i class="fas fa-bookmark"></i> Backtests Salvos</h2>
@@ -368,14 +318,12 @@
             </div>
         </div>
 
-        <!-- ==================== CONFIGURAÇÕES ==================== -->
+        <!-- CONFIGURAÇÕES -->
         <div class="page-content d-none" id="page-config">
             <div class="page-title">
                 <h2><i class="fas fa-cog"></i> Configurações</h2>
                 <p>Gerenciamento de dados, token e armazenamento</p>
             </div>
-
-            <!-- ===== TELA DE LOGIN PIN ===== -->
             <div id="config-login-screen">
                 <div class="pin-login-container">
                     <div class="glass-card">
@@ -384,27 +332,17 @@
                             <h3 class="pin-title">Acesso Restrito</h3>
                             <p class="pin-subtitle">Digite o PIN para acessar as configurações</p>
                             <div style="max-width:280px;margin:1.5rem auto 0">
-                                <input type="password" class="form-input pin-input" id="config-pin-input"
-                                       placeholder="••••" maxlength="10"
-                                       onkeydown="if(event.key==='Enter') verifyConfigPin()">
-                                <button class="btn-execute" style="margin-top:1rem" onclick="verifyConfigPin()">
-                                    <i class="fas fa-unlock"></i> Entrar
-                                </button>
+                                <input type="password" class="form-input pin-input" id="config-pin-input" placeholder="••••" maxlength="10" onkeydown="if(event.key==='Enter') verifyConfigPin()">
+                                <button class="btn-execute" style="margin-top:1rem" onclick="verifyConfigPin()"><i class="fas fa-unlock"></i> Entrar</button>
                             </div>
                             <div id="config-pin-error" class="config-status" style="margin-top:1rem"></div>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <!-- ===== CONTEÚDO (escondido até PIN correto) ===== -->
             <div id="config-panel" style="display:none">
-
-                <!-- Token BRAPI -->
                 <div class="glass-card mb-4">
-                    <div class="card-header-custom">
-                        <i class="fas fa-key"></i> Token BRAPI
-                    </div>
+                    <div class="card-header-custom"><i class="fas fa-key"></i> Token BRAPI</div>
                     <div class="card-body-custom">
                         <p class="config-description">Seu token de acesso à API brapi.dev. Se atingir o limite, crie outro em <a href="https://brapi.dev" target="_blank">brapi.dev</a> e cole aqui.</p>
                         <div class="form-row">
@@ -413,23 +351,16 @@
                                 <input type="text" class="form-input" id="config-brapi-token" placeholder="Cole seu token aqui...">
                             </div>
                             <div class="form-group form-action" style="flex:1">
-                                <button class="btn-execute btn-sm" onclick="saveBrapiToken()">
-                                    <i class="fas fa-save"></i> Salvar Token
-                                </button>
+                                <button class="btn-execute btn-sm" onclick="saveBrapiToken()"><i class="fas fa-save"></i> Salvar Token</button>
                             </div>
                         </div>
                         <div id="config-token-status" class="config-status"></div>
                     </div>
                 </div>
-
-                <!-- Download de Dados -->
                 <div class="glass-card mb-4">
-                    <div class="card-header-custom">
-                        <i class="fas fa-download"></i> Download de Dados
-                    </div>
+                    <div class="card-header-custom"><i class="fas fa-download"></i> Download de Dados</div>
                     <div class="card-body-custom">
-                        <p class="config-description">Baixe dados históricos dos ativos e armazene no Supabase. Selecione o tipo, período e timeframe.</p>
-
+                        <p class="config-description">Baixe dados históricos dos ativos e armazene no Supabase.</p>
                         <div class="form-row">
                             <div class="form-group">
                                 <label>Tipo de Ativo</label>
@@ -448,7 +379,6 @@
                                 </select>
                             </div>
                         </div>
-
                         <div class="form-row">
                             <div class="form-group">
                                 <label>Data Início</label>
@@ -459,17 +389,10 @@
                                 <input type="date" class="form-input" id="config-end-date">
                             </div>
                         </div>
-
                         <div class="form-row" style="gap:0.5rem">
-                            <button class="btn-execute" id="config-download-btn" onclick="downloadAllAssets()">
-                                <i class="fas fa-download"></i> Baixar Dados
-                            </button>
-                            <button class="btn-execute btn-update" id="config-update-btn" onclick="updateAllAssets()">
-                                <i class="fas fa-sync-alt"></i> Atualizar Dados
-                            </button>
+                            <button class="btn-execute" id="config-download-btn" onclick="downloadAllAssets()"><i class="fas fa-download"></i> Baixar Dados</button>
+                            <button class="btn-execute btn-update" id="config-update-btn" onclick="updateAllAssets()"><i class="fas fa-sync-alt"></i> Atualizar Dados</button>
                         </div>
-
-                        <!-- Progress -->
                         <div id="config-download-progress" class="download-progress" style="display:none">
                             <div class="progress-header">
                                 <span id="config-progress-label">Baixando...</span>
@@ -482,12 +405,8 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Alterar PIN -->
                 <div class="glass-card mb-4">
-                    <div class="card-header-custom">
-                        <i class="fas fa-shield-alt"></i> Alterar PIN
-                    </div>
+                    <div class="card-header-custom"><i class="fas fa-shield-alt"></i> Alterar PIN</div>
                     <div class="card-body-custom">
                         <div class="form-row">
                             <div class="form-group">
@@ -499,74 +418,58 @@
                                 <input type="password" class="form-input" id="config-new-pin" placeholder="Novo PIN">
                             </div>
                             <div class="form-group form-action">
-                                <button class="btn-execute btn-sm" style="background:linear-gradient(135deg,#ffd32a,#f0a500);color:#000" onclick="changeConfigPin()">
-                                    <i class="fas fa-key"></i> Alterar
-                                </button>
+                                <button class="btn-execute btn-sm" style="background:linear-gradient(135deg,#ffd32a,#f0a500);color:#000" onclick="changeConfigPin()"><i class="fas fa-key"></i> Alterar</button>
                             </div>
                         </div>
                         <div id="config-pin-change-status" class="config-status"></div>
                     </div>
                 </div>
-
-                <!-- Estatísticas Supabase -->
                 <div class="glass-card mb-4">
-                    <div class="card-header-custom">
-                        <i class="fas fa-database"></i> Armazenamento Supabase
-                    </div>
+                    <div class="card-header-custom"><i class="fas fa-database"></i> Armazenamento Supabase</div>
                     <div class="card-body-custom">
-                        <div id="config-stats">
-                            <div class="loading-state"><div class="spinner"></div><p>Carregando estatísticas...</p></div>
-                        </div>
+                        <div id="config-stats"><div class="loading-state"><div class="spinner"></div><p>Carregando estatísticas...</p></div></div>
                     </div>
                 </div>
-
-                <!-- Tabela de Ativos Armazenados -->
                 <div class="glass-card">
-                    <div class="card-header-custom">
-                        <i class="fas fa-list"></i> Ativos Armazenados no Supabase
-                    </div>
+                    <div class="card-header-custom"><i class="fas fa-list"></i> Ativos Armazenados no Supabase</div>
                     <div class="card-body-custom">
-                        <div id="config-assets-table">
-                            <div class="loading-state"><div class="spinner"></div><p>Carregando ativos...</p></div>
-                        </div>
+                        <div id="config-assets-table"><div class="loading-state"><div class="spinner"></div><p>Carregando ativos...</p></div></div>
                     </div>
                 </div>
+            </div>
+        </div>
 
-            </div><!-- /config-panel -->
-        </div><!-- /page-config -->
+    </div>
+</div>
 
-    </div><!-- /main-content -->
-</div><!-- /app-layout -->
-
-<!-- Scripts -->
 <script src="js/utils.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/app.js"></script>
 
 <script>
 (function() {
-    const sidebar = document.getElementById('sidebar');
-    const mainContent = document.getElementById('mainContent');
-    const collapseBtn = document.getElementById('sidebarCollapseBtn');
-    const collapseIcon = document.getElementById('collapseIcon');
-    const menuToggle = document.getElementById('menuToggle');
-    const sidebarClose = document.getElementById('sidebarClose');
-    const overlay = document.getElementById('sidebarOverlay');
+    var sidebar = document.getElementById('sidebar');
+    var mainContent = document.getElementById('mainContent');
+    var collapseBtn = document.getElementById('sidebarCollapseBtn');
+    var menuToggle = document.getElementById('menuToggle');
+    var sidebarClose = document.getElementById('sidebarClose');
+    var overlay = document.getElementById('sidebarOverlay');
 
-    function isMobile() {
-        return window.innerWidth <= 768;
+    function isMobile() { return window.innerWidth <= 768; }
+
+    function closeMobileSidebar() {
+        if (sidebar) { sidebar.classList.remove('mobile-open'); sidebar.classList.remove('open'); }
+        if (overlay) overlay.classList.remove('active');
     }
 
-    // Desktop: collapse/expand sidebar
     if (collapseBtn) {
         collapseBtn.addEventListener('click', function() {
-            if (isMobile()) return; // no-op on mobile
+            if (isMobile()) return;
             sidebar.classList.toggle('collapsed');
             mainContent.classList.toggle('sidebar-collapsed');
         });
     }
 
-    // Mobile: open sidebar
     if (menuToggle) {
         menuToggle.addEventListener('click', function() {
             sidebar.classList.add('mobile-open');
@@ -574,31 +477,18 @@
         });
     }
 
-    // Mobile: close sidebar via X button
     if (sidebarClose) {
-        sidebarClose.addEventListener('click', function() {
-            sidebar.classList.remove('mobile-open');
-            overlay.classList.remove('active');
-        });
+        sidebarClose.addEventListener('click', closeMobileSidebar);
     }
 
-    // Mobile: close sidebar via overlay tap
     if (overlay) {
-        overlay.addEventListener('click', function() {
-            sidebar.classList.remove('mobile-open');
-            overlay.classList.remove('active');
-        });
+        overlay.addEventListener('click', closeMobileSidebar);
     }
 
-    // On resize, clean up classes
     window.addEventListener('resize', function() {
-        if (!isMobile()) {
-            sidebar.classList.remove('mobile-open');
-            overlay.classList.remove('active');
-        }
+        if (!isMobile()) closeMobileSidebar();
     });
 
-    // Show/hide custom tickers field
     ['daily', 'intra', 'bmf'].forEach(function(prefix) {
         var marketSel = document.getElementById(prefix + '-market');
         var tickersWrap = document.getElementById(prefix + '-tickers-wrap');
@@ -608,6 +498,17 @@
             });
         }
     });
+
+    document.querySelectorAll('.nav-link[data-page]').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            var page = this.getAttribute('data-page');
+            if (page && typeof navigate === 'function') navigate(page);
+            closeMobileSidebar();
+        });
+    });
+
+    if (typeof navigate === 'function') navigate('daily');
 })();
 </script>
 
