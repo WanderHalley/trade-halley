@@ -925,3 +925,247 @@ function exportResultsXLSX(tableId) {
     var filename = "backtest_" + getTodayStr() + ".xlsx";
     XLSX.writeFile(wb, filename);
 }
+
+// ============================================================
+// DISPLAY RESULTS (COMPLETE - 11 COLUMNS) + EXPORT BUTTONS
+// ============================================================
+function displayResults(containerId, tableId, result) {
+    var container = document.getElementById(containerId);
+    if (!container) return;
+
+    var rows = [];
+    if (result.ticker && result.metrics) {
+        var m = result.metrics;
+        rows.push({
+            acao: result.ticker, total_gain: m.total_gain, pct_gain: m.pct_gain,
+            total_loss: m.total_loss, pct_loss: m.pct_loss, total_trades: m.total_trades,
+            resultado_pct: m.resultado_pct, max_drawdown_pct: m.max_drawdown_pct,
+            ganho_maximo_pct: m.ganho_maximo_pct, ganho_medio_pct: m.ganho_medio_pct,
+            volume_medio: m.volume_medio
+        });
+    } else if (result.results) {
+        rows = result.results;
+    }
+
+    if (rows.length === 0) {
+        container.innerHTML = '<p class="text-muted" style="padding:1rem">Nenhum resultado encontrado.</p>';
+        return;
+    }
+
+    var thBase = 'padding:8px 12px;background:#12122a;color:#8888aa;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;';
+    var tdBase = 'padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.85rem;white-space:nowrap;';
+
+    var t = '';
+
+    // --- Botões de exportação ---
+    t += '<div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-bottom:0.8rem;margin-top:1rem;flex-wrap:wrap">';
+    t += '<button onclick="exportResultsPDF(\'' + tableId + '\')" style="background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px"><i class="fas fa-file-pdf"></i> Baixar PDF</button>';
+    t += '<button onclick="exportResultsXLSX(\'' + tableId + '\')" style="background:linear-gradient(135deg,#27ae60,#1e8449);color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px"><i class="fas fa-file-excel"></i> Baixar XLSX</button>';
+    t += '</div>';
+
+    // --- Wrapper com scroll horizontal ---
+    t += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px;border:1px solid rgba(255,255,255,0.06)">';
+    t += '<table class="table table-dark table-sm" id="' + tableId + '" style="margin:0;min-width:1100px">';
+
+    // --- THEAD: 11 colunas ---
+    t += '<thead><tr>';
+    t += '<th style="' + thBase + 'text-align:left">A\u00c7\u00c3O</th>';
+    t += '<th style="' + thBase + 'text-align:center">TOTAL GAIN</th>';
+    t += '<th style="' + thBase + 'text-align:center">% GAIN</th>';
+    t += '<th style="' + thBase + 'text-align:center">TOTAL LOSS</th>';
+    t += '<th style="' + thBase + 'text-align:center">% LOSS</th>';
+    t += '<th style="' + thBase + 'text-align:center">TOTAL TRADES</th>';
+    t += '<th style="' + thBase + 'text-align:center">RESULTADO %</th>';
+    t += '<th style="' + thBase + 'text-align:center">MAX DRAWDOWN %</th>';
+    t += '<th style="' + thBase + 'text-align:center">GANHO M\u00c1XIMO %</th>';
+    t += '<th style="' + thBase + 'text-align:center">GANHO M\u00c9DIO %</th>';
+    t += '<th style="' + thBase + 'text-align:center">VOLUME M\u00c9DIO</th>';
+    t += '</tr></thead>';
+
+    // --- TBODY: 11 colunas ---
+    t += '<tbody>';
+    rows.forEach(function(row) {
+        var ticker = row.acao || row.ticker || "";
+        var tg = row.total_gain || 0;
+        var pg = row.pct_gain || 0;
+        var tl = row.total_loss || 0;
+        var pl = row.pct_loss || 0;
+        var tt = row.total_trades || 0;
+        var rp = row.resultado_pct || 0;
+        var md = row.max_drawdown_pct || 0;
+        var gmax = row.ganho_maximo_pct || 0;
+        var gmed = row.ganho_medio_pct || 0;
+        var vm = row.volume_medio || 0;
+
+        var rpColor = rp >= 0 ? '#00d4aa' : '#ff6b6b';
+        var mdColor = md >= 0 ? '#00d4aa' : '#ff6b6b';
+        var gmaxColor = gmax >= 0 ? '#00d4aa' : '#ff6b6b';
+        var gmedColor = gmed >= 0 ? '#00d4aa' : '#ff6b6b';
+
+        t += '<tr>';
+        t += '<td style="' + tdBase + 'text-align:left;font-weight:600">' + ticker + '</td>';
+        t += '<td style="' + tdBase + 'text-align:center">' + tg + '</td>';
+        t += '<td style="' + tdBase + 'text-align:center">' + fmtPct(pg) + '</td>';
+        t += '<td style="' + tdBase + 'text-align:center">' + tl + '</td>';
+        t += '<td style="' + tdBase + 'text-align:center">' + fmtPct(pl) + '</td>';
+        t += '<td style="' + tdBase + 'text-align:center">' + tt + '</td>';
+        t += '<td style="' + tdBase + 'text-align:center;color:' + rpColor + ';font-weight:700">' + fmtPct(rp) + '</td>';
+        t += '<td style="' + tdBase + 'text-align:center;color:' + mdColor + ';font-weight:600">' + fmtPct(md) + '</td>';
+        t += '<td style="' + tdBase + 'text-align:center;color:' + gmaxColor + ';font-weight:600">' + fmtPct(gmax) + '</td>';
+        t += '<td style="' + tdBase + 'text-align:center;color:' + gmedColor + ';font-weight:600">' + fmtPct(gmed) + '</td>';
+        t += '<td style="' + tdBase + 'text-align:center;color:#ccc">' + fmtVol(vm) + '</td>';
+        t += '</tr>';
+    });
+    t += '</tbody></table></div>';
+
+    // --- Summary ---
+    if (rows.length > 1) {
+        var totalPositive = 0, totalNegative = 0, totalTrades = 0;
+        rows.forEach(function(r) {
+            var rp = r.resultado_pct || 0;
+            if (rp > 0) totalPositive++;
+            else if (rp < 0) totalNegative++;
+            totalTrades += (r.total_trades || 0);
+        });
+        t += '<div style="display:flex;gap:1rem;margin-top:0.8rem;flex-wrap:wrap">';
+        t += '<div style="background:rgba(0,212,170,0.1);border:1px solid rgba(0,212,170,0.3);padding:8px 16px;border-radius:8px;font-size:0.8rem"><span style="color:#8888aa">Positivos:</span> <strong style="color:#00d4aa">' + totalPositive + '</strong></div>';
+        t += '<div style="background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.3);padding:8px 16px;border-radius:8px;font-size:0.8rem"><span style="color:#8888aa">Negativos:</span> <strong style="color:#ff6b6b">' + totalNegative + '</strong></div>';
+        t += '<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:8px 16px;border-radius:8px;font-size:0.8rem"><span style="color:#8888aa">Ativos:</span> <strong style="color:#fff">' + rows.length + '</strong></div>';
+        t += '<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:8px 16px;border-radius:8px;font-size:0.8rem"><span style="color:#8888aa">Total Trades:</span> <strong style="color:#fff">' + totalTrades + '</strong></div>';
+        t += '</div>';
+    }
+
+    container.innerHTML = t;
+    makeSortable(tableId);
+}
+
+// ============================================================
+// EXPORT: PDF
+// ============================================================
+function exportResultsPDF(tableId) {
+    var JsPDFClass = null;
+    if (window.jspdf && window.jspdf.jsPDF) {
+        JsPDFClass = window.jspdf.jsPDF;
+    } else if (typeof jsPDF !== 'undefined') {
+        JsPDFClass = jsPDF;
+    }
+    if (!JsPDFClass) {
+        alert('Biblioteca jsPDF n\u00e3o carregada. Verifique sua conex\u00e3o e recarregue a p\u00e1gina.');
+        return;
+    }
+
+    var table = document.getElementById(tableId);
+    if (!table) { alert('Tabela n\u00e3o encontrada.'); return; }
+
+    var doc = new JsPDFClass({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+    doc.setFontSize(16);
+    doc.setTextColor(40, 40, 40);
+    doc.text('Trade Halley - Resultado Backtest', 14, 15);
+
+    doc.setFontSize(9);
+    doc.setTextColor(120, 120, 120);
+    doc.text('Exportado em: ' + new Date().toLocaleString('pt-BR'), 14, 22);
+
+    var headers = [];
+    table.querySelectorAll('thead th').forEach(function(th) {
+        var txt = th.textContent.trim().replace(/[\u21C5\u25B2\u25BC]/g, '').trim();
+        headers.push(txt);
+    });
+
+    var body = [];
+    table.querySelectorAll('tbody tr').forEach(function(tr) {
+        var rowData = [];
+        tr.querySelectorAll('td').forEach(function(td) {
+            rowData.push(td.textContent.trim());
+        });
+        if (rowData.length > 0) body.push(rowData);
+    });
+
+    var atOpts = {
+        head: [headers],
+        body: body,
+        startY: 28,
+        theme: 'grid',
+        styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+        headStyles: { fillColor: [18, 18, 42], textColor: [200, 200, 220], fontSize: 7, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [245, 245, 250] },
+        margin: { left: 8, right: 8 },
+        didDrawPage: function(data) {
+            doc.setFontSize(7);
+            doc.setTextColor(150, 150, 150);
+            doc.text('Trade Halley v3.2', data.settings.margin.left, doc.internal.pageSize.height - 5);
+            doc.text('P\u00e1gina ' + doc.internal.getCurrentPageInfo().pageNumber, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 5);
+        }
+    };
+
+    if (typeof doc.autoTable === 'function') {
+        doc.autoTable(atOpts);
+    } else if (typeof autoTable === 'function') {
+        autoTable(doc, atOpts);
+    } else if (window.jspdfAutoTable) {
+        window.jspdfAutoTable(doc, atOpts);
+    } else {
+        alert('Plugin autoTable n\u00e3o encontrado. Verifique o CDN.');
+        return;
+    }
+
+    doc.save('backtest_' + getTodayStr() + '.pdf');
+}
+
+// ============================================================
+// EXPORT: XLSX
+// ============================================================
+function exportResultsXLSX(tableId) {
+    if (typeof XLSX === 'undefined') {
+        alert('Biblioteca SheetJS/XLSX n\u00e3o carregada. Verifique sua conex\u00e3o e recarregue a p\u00e1gina.');
+        return;
+    }
+
+    var table = document.getElementById(tableId);
+    if (!table) { alert('Tabela n\u00e3o encontrada.'); return; }
+
+    var headers = [];
+    table.querySelectorAll('thead th').forEach(function(th) {
+        var txt = th.textContent.trim().replace(/[\u21C5\u25B2\u25BC]/g, '').trim();
+        headers.push(txt);
+    });
+
+    var data = [headers];
+    table.querySelectorAll('tbody tr').forEach(function(tr) {
+        var rowData = [];
+        tr.querySelectorAll('td').forEach(function(td, idx) {
+            var txt = td.textContent.trim();
+            if (idx === 0) {
+                rowData.push(txt);
+            } else {
+                var num = parseFloat(txt.replace(/[%\s]/g, '').replace(/\./g, '').replace(',', '.'));
+                if (!isNaN(num)) {
+                    rowData.push(num);
+                } else {
+                    rowData.push(txt);
+                }
+            }
+        });
+        if (rowData.length > 0) data.push(rowData);
+    });
+
+    var ws = XLSX.utils.aoa_to_sheet(data);
+
+    var colWidths = headers.map(function(h, i) {
+        var max = h.length;
+        data.forEach(function(row) {
+            var cell = row[i];
+            if (cell !== undefined && cell !== null) {
+                var len = String(cell).length;
+                if (len > max) max = len;
+            }
+        });
+        return { wch: max + 2 };
+    });
+    ws['!cols'] = colWidths;
+
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Backtest');
+    XLSX.writeFile(wb, 'backtest_' + getTodayStr() + '.xlsx');
+}
