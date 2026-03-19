@@ -1,69 +1,62 @@
 // ============================================================
 // js/app.js — Trade Halley Frontend v3.2
-// SPA: Dashboard, B3 Daily, B3 Intraday, BMF Intraday,
-//      Estratégias, Salvos, Config (PIN + token BRAPI + download)
 // ============================================================
 
 const API_BASE = "https://wanderhalleylee-trade-halley.hf.space";
 
-// ─── Stored credentials (localStorage) ───
 function getBrapiToken() { return localStorage.getItem("brapi_token") || "ktC3hLVgH3QXrFnssfbcUj"; }
 function setBrapiToken(token) { localStorage.setItem("brapi_token", token); }
 function getStoredPin() { return localStorage.getItem("config_pin") || ""; }
 function setStoredPin(pin) { localStorage.setItem("config_pin", pin); }
 
-// ─── API Helpers ───
 async function apiGet(path) {
     try {
-        const resp = await fetch(`${API_BASE}${path}`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const resp = await fetch(API_BASE + path);
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
         return await resp.json();
-    } catch (e) { console.error(`GET ${path}:`, e); return null; }
+    } catch (e) { console.error("GET " + path + ":", e); return null; }
 }
 
 async function apiPost(path, body) {
     try {
-        const resp = await fetch(`${API_BASE}${path}`, {
+        const resp = await fetch(API_BASE + path, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
+            body: JSON.stringify(body)
         });
         if (!resp.ok) {
             const txt = await resp.text();
-            throw new Error(`HTTP ${resp.status}: ${txt}`);
+            throw new Error("HTTP " + resp.status + ": " + txt);
         }
         return await resp.json();
-    } catch (e) { console.error(`POST ${path}:`, e); return null; }
+    } catch (e) { console.error("POST " + path + ":", e); return null; }
 }
 
 async function apiDelete(path) {
     try {
-        const resp = await fetch(`${API_BASE}${path}`, { method: "DELETE" });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const resp = await fetch(API_BASE + path, { method: "DELETE" });
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
         return await resp.json();
-    } catch (e) { console.error(`DELETE ${path}:`, e); return null; }
+    } catch (e) { console.error("DELETE " + path + ":", e); return null; }
 }
 
-// ─── BRAPI Direct ───
-async function brapiGet(endpoint, params = {}) {
+async function brapiGet(endpoint, params) {
+    if (!params) params = {};
     params.token = getBrapiToken();
-    const qs = new URLSearchParams(params).toString();
+    var qs = new URLSearchParams(params).toString();
     try {
-        const resp = await fetch(`https://brapi.dev/api${endpoint}?${qs}`);
-        if (!resp.ok) throw new Error(`BRAPI ${resp.status}`);
+        var resp = await fetch("https://brapi.dev/api" + endpoint + "?" + qs);
+        if (!resp.ok) throw new Error("BRAPI " + resp.status);
         return await resp.json();
-    } catch (e) { console.error(`BRAPI ${endpoint}:`, e); return null; }
+    } catch (e) { console.error("BRAPI " + endpoint + ":", e); return null; }
 }
 
-// ─── Fetch ALL tickers from BRAPI for a given type (usado apenas em Config/Download) ───
 async function fetchAllBrapiTickers(type) {
-    let tickers = [];
-    let page = 1;
-    let hasMore = true;
+    var tickers = [], page = 1, hasMore = true;
     while (hasMore) {
-        const data = await brapiGet("/quote/list", { type: type, limit: 100, page: page });
+        var data = await brapiGet("/quote/list", { type: type, limit: 100, page: page });
         if (!data || !data.stocks || data.stocks.length === 0) { hasMore = false; break; }
-        data.stocks.forEach(s => tickers.push(s.stock));
+        data.stocks.forEach(function(s) { tickers.push(s.stock); });
         hasMore = data.hasNextPage || false;
         page++;
         if (page > 50) break;
@@ -71,21 +64,18 @@ async function fetchAllBrapiTickers(type) {
     return tickers;
 }
 
-// ─── Navigation ───
-let currentPage = "daily";
+var currentPage = "daily";
 
 function navigate(page) {
     currentPage = page;
-    document.querySelectorAll(".page-content").forEach(el => el.classList.add("d-none"));
-    const target = document.getElementById(`page-${page}`);
+    document.querySelectorAll(".page-content").forEach(function(el) { el.classList.add("d-none"); });
+    var target = document.getElementById("page-" + page);
     if (target) target.classList.remove("d-none");
-
-    document.querySelectorAll(".nav-link").forEach(el => el.classList.remove("active"));
-    const navLink = document.querySelector(`.nav-link[data-page="${page}"]`);
+    document.querySelectorAll(".nav-link").forEach(function(el) { el.classList.remove("active"); });
+    var navLink = document.querySelector('.nav-link[data-page="' + page + '"]');
     if (navLink) navLink.classList.add("active");
-
-    document.getElementById("sidebar")?.classList.remove("open");
-
+    var sb = document.getElementById("sidebar");
+    if (sb) sb.classList.remove("open");
     switch (page) {
         case "daily": loadDailyPage(); break;
         case "intraday": loadIntradayPage(); break;
@@ -96,7 +86,6 @@ function navigate(page) {
     }
 }
 
-// ─── Utility Functions ───
 function fmtPct(val) {
     if (val === null || val === undefined || isNaN(val)) return "0%";
     return val.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 3 }) + "%";
@@ -113,16 +102,17 @@ function fmtVol(val) {
 function getTodayStr() { return new Date().toISOString().split("T")[0]; }
 
 function getDefaultStartDate() {
-    const d = new Date(); d.setFullYear(d.getFullYear(), 0, 1);
+    var d = new Date();
+    d.setFullYear(d.getFullYear(), 0, 1);
     return d.toISOString().split("T")[0];
 }
 
 function populateSelect(selectId, options, defaultVal) {
-    const sel = document.getElementById(selectId);
+    var sel = document.getElementById(selectId);
     if (!sel) return;
     sel.innerHTML = "";
-    options.forEach(opt => {
-        const o = document.createElement("option");
+    options.forEach(function(opt) {
+        var o = document.createElement("option");
         o.value = opt.id || opt.value || opt;
         o.textContent = opt.name || opt.label || opt;
         if (o.value === defaultVal) o.selected = true;
@@ -130,147 +120,102 @@ function populateSelect(selectId, options, defaultVal) {
     });
 }
 
-// ─── Sortable Table ───
-let sortState = {};
+var sortState = {};
 
 function makeSortable(tableId) {
-    const table = document.getElementById(tableId);
+    var table = document.getElementById(tableId);
     if (!table) return;
-    table.querySelectorAll("thead th").forEach((th, colIdx) => {
+    table.querySelectorAll("thead th").forEach(function(th, colIdx) {
         th.style.cursor = "pointer";
         th.style.userSelect = "none";
         th.style.whiteSpace = "nowrap";
-        const old = th.querySelector(".sort-arrow"); if (old) old.remove();
-        const arrow = document.createElement("span");
+        var old = th.querySelector(".sort-arrow");
+        if (old) old.remove();
+        var arrow = document.createElement("span");
         arrow.className = "sort-arrow";
         arrow.style.marginLeft = "6px";
         arrow.style.fontSize = "0.7em";
         arrow.style.opacity = "0.4";
-        arrow.textContent = "⇅";
+        arrow.textContent = "\u21C5";
         th.appendChild(arrow);
-        // Remove old listeners by cloning
-        const newTh = th.cloneNode(true);
+        var newTh = th.cloneNode(true);
         th.parentNode.replaceChild(newTh, th);
-        newTh.addEventListener("click", () => sortTable(tableId, colIdx));
+        newTh.addEventListener("click", function() { sortTable(tableId, colIdx); });
     });
 }
 
 function sortTable(tableId, colIdx) {
-    const table = document.getElementById(tableId);
+    var table = document.getElementById(tableId);
     if (!table) return;
-    const tbody = table.querySelector("tbody");
+    var tbody = table.querySelector("tbody");
     if (!tbody) return;
-    const rows = Array.from(tbody.querySelectorAll("tr"));
+    var rows = Array.from(tbody.querySelectorAll("tr"));
     if (rows.length === 0) return;
-
     if (!sortState[tableId]) sortState[tableId] = {};
-    const prev = sortState[tableId];
-    let dir = "desc";
+    var prev = sortState[tableId];
+    var dir = "desc";
     if (prev.col === colIdx && prev.dir === "desc") dir = "asc";
-    sortState[tableId] = { col: colIdx, dir };
-
-    table.querySelectorAll("thead th").forEach((th, i) => {
-        const arrow = th.querySelector(".sort-arrow");
+    sortState[tableId] = { col: colIdx, dir: dir };
+    table.querySelectorAll("thead th").forEach(function(th, i) {
+        var arrow = th.querySelector(".sort-arrow");
         if (!arrow) return;
-        if (i === colIdx) { arrow.textContent = dir === "asc" ? "▲" : "▼"; arrow.style.opacity = "1"; }
-        else { arrow.textContent = "⇅"; arrow.style.opacity = "0.4"; }
+        if (i === colIdx) { arrow.textContent = dir === "asc" ? "\u25B2" : "\u25BC"; arrow.style.opacity = "1"; }
+        else { arrow.textContent = "\u21C5"; arrow.style.opacity = "0.4"; }
     });
-
-    rows.sort((a, b) => {
-        let aVal = a.cells[colIdx]?.textContent?.trim() || "";
-        let bVal = b.cells[colIdx]?.textContent?.trim() || "";
-        let aNum = parseFloat(aVal.replace(/[R$%\s]/g, "").replace(/\./g, "").replace(",", "."));
-        let bNum = parseFloat(bVal.replace(/[R$%\s]/g, "").replace(/\./g, "").replace(",", "."));
+    rows.sort(function(a, b) {
+        var aVal = a.cells[colIdx] ? a.cells[colIdx].textContent.trim() : "";
+        var bVal = b.cells[colIdx] ? b.cells[colIdx].textContent.trim() : "";
+        var aNum = parseFloat(aVal.replace(/[R$%\s]/g, "").replace(/\./g, "").replace(",", "."));
+        var bNum = parseFloat(bVal.replace(/[R$%\s]/g, "").replace(/\./g, "").replace(",", "."));
         if (!isNaN(aNum) && !isNaN(bNum)) return dir === "asc" ? aNum - bNum : bNum - aNum;
         return dir === "asc" ? aVal.localeCompare(bVal, "pt-BR") : bVal.localeCompare(aVal, "pt-BR");
     });
-    rows.forEach(row => tbody.appendChild(row));
+    rows.forEach(function(row) { tbody.appendChild(row); });
 }
 
-// ─── Direction buttons ───
 function setupDirectionButtons(buyBtnId, sellBtnId, hiddenFieldId) {
-    const buyBtn = document.getElementById(buyBtnId);
-    const sellBtn = document.getElementById(sellBtnId);
-    const hidden = document.getElementById(hiddenFieldId);
+    var buyBtn = document.getElementById(buyBtnId);
+    var sellBtn = document.getElementById(sellBtnId);
+    var hidden = document.getElementById(hiddenFieldId);
     if (!buyBtn || !sellBtn) return;
-    buyBtn.addEventListener("click", () => {
+    buyBtn.addEventListener("click", function() {
         buyBtn.classList.add("active-dir"); sellBtn.classList.remove("active-dir");
         if (hidden) hidden.value = "compra";
     });
-    sellBtn.addEventListener("click", () => {
+    sellBtn.addEventListener("click", function() {
         sellBtn.classList.add("active-dir"); buyBtn.classList.remove("active-dir");
         if (hidden) hidden.value = "venda";
     });
 }
 
 // ============================================================
-// DASHBOARD
-// ============================================================
-async function loadDashboard() {
-    const data = await apiGet("/dashboard/summary");
-    if (!data) return;
-    const statsDiv = document.getElementById("dashboard-stats");
-    if (statsDiv) {
-        statsDiv.innerHTML = `
-            <div class="col-md-3"><div class="card bg-dark text-light p-3">
-                <h6 class="text-info">Ativos B3</h6><h3>${data.total_b3 || 30}</h3>
-            </div></div>
-            <div class="col-md-3"><div class="card bg-dark text-light p-3">
-                <h6 class="text-info">Ativos BMF</h6><h3>${data.total_bmf || 10}</h3>
-            </div></div>
-            <div class="col-md-3"><div class="card bg-dark text-light p-3">
-                <h6 class="text-info">Estratégias</h6><h3>${data.total_strategies || 13}</h3>
-            </div></div>
-            <div class="col-md-3"><div class="card bg-dark text-light p-3">
-                <h6 class="text-info">Entrada+Saída</h6><h3>${(data.total_daily_entry||7)+(data.total_daily_exit||3)+(data.total_intraday_entry||12)+(data.total_intraday_exit||7)}</h3>
-            </div></div>`;
-    }
-    const tickersDiv = document.getElementById("dashboard-tickers");
-    if (tickersDiv && data.top_tickers) {
-        let html = "";
-        data.top_tickers.forEach(t => {
-            const color = (t.change_pct||0) >= 0 ? "text-success" : "text-danger";
-            const arrow = (t.change_pct||0) >= 0 ? "▲" : "▼";
-            html += `<div class="col-md-3 mb-3"><div class="card bg-dark text-light p-3">
-                <div class="d-flex justify-content-between"><strong>${t.ticker}</strong>
-                <span class="${color}">${arrow} ${fmtPct(t.change_pct)}</span></div>
-                <h4>R$ ${(t.price||0).toFixed(2)}</h4>
-                <small class="text-muted">${t.name||""}</small>
-            </div></div>`;
-        });
-        tickersDiv.innerHTML = html;
-    }
-}
-
-// ============================================================
 // STRATEGIES PAGE
 // ============================================================
 async function loadStrategiesPage() {
-    const data = await apiGet("/strategies/all");
-    const container = document.getElementById("strategies-container");
+    var data = await apiGet("/strategies/all");
+    var container = document.getElementById("strategies-container");
     if (!container) return;
     if (!data) { container.innerHTML = '<p class="text-muted">Erro ao carregar estratégias.</p>'; return; }
-
-    let html = "";
+    var html = "";
     function buildSection(icon, title, items, cols) {
         if (!items || items.length === 0) return "";
-        let h = `<div class="strategy-section"><div class="strategy-section-title"><i class="fas fa-${icon}"></i> ${title} (${items.length})</div>`;
-        h += `<div class="table-responsive"><table class="table table-dark table-sm"><thead><tr>`;
-        cols.forEach(c => { h += `<th>${c}</th>`; });
-        h += `</tr></thead><tbody>`;
-        items.forEach(s => {
-            h += `<tr><td><strong>${s.name||""}</strong></td><td>${s.description||""}</td><td>${s.category||""}</td>`;
-            if (cols.length > 3) h += `<td>${(s.requires||[]).join(", ")||"—"}</td>`;
-            h += `</tr>`;
+        var h = '<div class="strategy-section"><div class="strategy-section-title"><i class="fas fa-' + icon + '"></i> ' + title + ' (' + items.length + ')</div>';
+        h += '<div class="table-responsive"><table class="table table-dark table-sm"><thead><tr>';
+        cols.forEach(function(c) { h += '<th>' + c + '</th>'; });
+        h += '</tr></thead><tbody>';
+        items.forEach(function(s) {
+            h += '<tr><td><strong>' + (s.name||"") + '</strong></td><td>' + (s.description||"") + '</td><td>' + (s.category||"") + '</td>';
+            if (cols.length > 3) h += '<td>' + ((s.requires||[]).join(", ")||"\u2014") + '</td>';
+            h += '</tr>';
         });
-        h += `</tbody></table></div></div>`;
+        h += '</tbody></table></div></div>';
         return h;
     }
-    html += buildSection("wave-square", "Indicadores Técnicos", data.indicator_strategies, ["Nome","Descrição","Categoria"]);
-    html += buildSection("sign-in-alt", "Entrada Diário", data.daily_entry, ["Nome","Descrição","Categoria","Requer"]);
-    html += buildSection("sign-out-alt", "Saída Diário", data.daily_exit, ["Nome","Descrição","Categoria"]);
-    html += buildSection("sign-in-alt", "Entrada Intraday", data.intraday_entry, ["Nome","Descrição","Categoria","Requer"]);
-    html += buildSection("sign-out-alt", "Saída Intraday", data.intraday_exit, ["Nome","Descrição","Categoria","Requer"]);
+    html += buildSection("wave-square", "Indicadores T\u00e9cnicos", data.indicator_strategies, ["Nome","Descri\u00e7\u00e3o","Categoria"]);
+    html += buildSection("sign-in-alt", "Entrada Di\u00e1rio", data.daily_entry, ["Nome","Descri\u00e7\u00e3o","Categoria","Requer"]);
+    html += buildSection("sign-out-alt", "Sa\u00edda Di\u00e1rio", data.daily_exit, ["Nome","Descri\u00e7\u00e3o","Categoria"]);
+    html += buildSection("sign-in-alt", "Entrada Intraday", data.intraday_entry, ["Nome","Descri\u00e7\u00e3o","Categoria","Requer"]);
+    html += buildSection("sign-out-alt", "Sa\u00edda Intraday", data.intraday_exit, ["Nome","Descri\u00e7\u00e3o","Categoria","Requer"]);
     container.innerHTML = html;
 }
 
@@ -278,73 +223,59 @@ async function loadStrategiesPage() {
 // SAVED BACKTESTS
 // ============================================================
 async function loadSavedPage() {
-    const data = await apiGet("/backtests/saved");
-    const container = document.getElementById("saved-container");
+    var data = await apiGet("/backtests/saved");
+    var container = document.getElementById("saved-container");
     if (!container) return;
     if (!data || !data.backtests || data.backtests.length === 0) {
         container.innerHTML = '<p class="text-muted">Nenhum backtest salvo.</p>'; return;
     }
-    let html = `<div class="table-responsive"><table class="table table-dark table-sm"><thead><tr>
-    <th>Ticker</th><th>Estratégia</th><th>Resultado</th><th>Data</th><th>Ações</th></tr></thead><tbody>`;
-    data.backtests.forEach(bt => {
-        html += `<tr>
-            <td>${bt.ticker||bt.result?.ticker||""}</td>
-            <td>${bt.entry_strategy_name||bt.strategy_name||bt.strategy||bt.result?.entry_strategy_name||""}</td>
-            <td>${fmtPct(bt.resultado_pct||bt.total_return_pct||bt.metrics?.resultado_pct||bt.result?.metrics?.resultado_pct)}</td>
-            <td>${bt.saved_at||""}</td>
-            <td><button class="btn btn-outline-danger btn-sm" onclick="deleteSavedBacktest('${bt.id}')"><i class="fas fa-trash"></i></button></td>
-        </tr>`;
+    var html = '<div class="table-responsive"><table class="table table-dark table-sm"><thead><tr>';
+    html += '<th>Ticker</th><th>Estrat\u00e9gia</th><th>Resultado</th><th>Data</th><th>A\u00e7\u00f5es</th></tr></thead><tbody>';
+    data.backtests.forEach(function(bt) {
+        var tk = bt.ticker || (bt.result ? bt.result.ticker : "") || "";
+        var st = bt.entry_strategy_name || bt.strategy_name || bt.strategy || (bt.result ? bt.result.entry_strategy_name : "") || "";
+        var rp = bt.resultado_pct || bt.total_return_pct || (bt.metrics ? bt.metrics.resultado_pct : 0) || (bt.result && bt.result.metrics ? bt.result.metrics.resultado_pct : 0) || 0;
+        html += '<tr><td>' + tk + '</td><td>' + st + '</td><td>' + fmtPct(rp) + '</td><td>' + (bt.saved_at||"") + '</td>';
+        html += '<td><button class="btn btn-outline-danger btn-sm" onclick="deleteSavedBacktest(\'' + bt.id + '\')"><i class="fas fa-trash"></i></button></td></tr>';
     });
-    html += `</tbody></table></div>`;
+    html += '</tbody></table></div>';
     container.innerHTML = html;
 }
 
 async function deleteSavedBacktest(id) {
     if (!confirm("Excluir este backtest salvo?")) return;
-    await apiDelete(`/backtests/saved/${id}`);
+    await apiDelete("/backtests/saved/" + id);
     loadSavedPage();
 }
 
 // ============================================================
-// CONFIG PAGE — PIN LOGIN
+// CONFIG PAGE
 // ============================================================
-let configAuthenticated = false;
+var configAuthenticated = false;
 
 async function loadConfigPage() {
-    const savedPin = getStoredPin();
-
-    if (configAuthenticated && savedPin) {
-        showConfigPanel();
-        return;
-    }
-
+    var savedPin = getStoredPin();
+    if (configAuthenticated && savedPin) { showConfigPanel(); return; }
     if (savedPin) {
-        const result = await apiPost("/config/verify-pin", { pin: savedPin });
-        if (result && result.valid) {
-            configAuthenticated = true;
-            showConfigPanel();
-            return;
-        } else {
-            localStorage.removeItem("config_pin");
-        }
+        var result = await apiPost("/config/verify-pin", { pin: savedPin });
+        if (result && result.valid) { configAuthenticated = true; showConfigPanel(); return; }
+        else { localStorage.removeItem("config_pin"); }
     }
-
     document.getElementById("config-login-screen").style.display = "block";
     document.getElementById("config-panel").style.display = "none";
-    document.getElementById("config-pin-input")?.focus();
+    var pi = document.getElementById("config-pin-input");
+    if (pi) pi.focus();
 }
 
 async function verifyConfigPin() {
-    const pinInput = document.getElementById("config-pin-input");
-    const errorDiv = document.getElementById("config-pin-error");
-    const pin = pinInput?.value?.trim();
-
+    var pinInput = document.getElementById("config-pin-input");
+    var errorDiv = document.getElementById("config-pin-error");
+    var pin = pinInput ? pinInput.value.trim() : "";
     if (!pin) {
         if (errorDiv) { errorDiv.className = "config-status error"; errorDiv.textContent = "Digite o PIN."; }
         return;
     }
-
-    const result = await apiPost("/config/verify-pin", { pin });
+    var result = await apiPost("/config/verify-pin", { pin: pin });
     if (result && result.valid) {
         configAuthenticated = true;
         setStoredPin(pin);
@@ -359,102 +290,66 @@ async function verifyConfigPin() {
 async function showConfigPanel() {
     document.getElementById("config-login-screen").style.display = "none";
     document.getElementById("config-panel").style.display = "block";
-
-    const tokenInput = document.getElementById("config-brapi-token");
+    var tokenInput = document.getElementById("config-brapi-token");
     if (tokenInput) tokenInput.value = getBrapiToken();
-
-    const sd = document.getElementById("config-start-date");
-    const ed = document.getElementById("config-end-date");
-    if (sd && !sd.value) { const d = new Date(); d.setFullYear(d.getFullYear()-1); sd.value = d.toISOString().split("T")[0]; }
+    var sd = document.getElementById("config-start-date");
+    var ed = document.getElementById("config-end-date");
+    if (sd && !sd.value) { var d = new Date(); d.setFullYear(d.getFullYear()-1); sd.value = d.toISOString().split("T")[0]; }
     if (ed && !ed.value) ed.value = getTodayStr();
-
-    const stats = await apiGet("/storage/stats");
-    const statsDiv = document.getElementById("config-stats");
+    var stats = await apiGet("/storage/stats");
+    var statsDiv = document.getElementById("config-stats");
     if (statsDiv && stats) {
-        const lastUpdate = stats.last_auto_update ? new Date(stats.last_auto_update).toLocaleString("pt-BR") : "Nunca";
-        statsDiv.innerHTML = `<div class="stats-grid">
-            <div class="stat-mini"><div class="stat-val">${stats.total_assets||0}</div><div class="stat-lbl">Total Ativos</div></div>
-            <div class="stat-mini"><div class="stat-val">${stats.daily_assets||0}</div><div class="stat-lbl">Ativos Diários</div></div>
-            <div class="stat-mini"><div class="stat-val">${stats.intraday_assets||0}</div><div class="stat-lbl">Ativos Intraday</div></div>
-            <div class="stat-mini"><div class="stat-val">${(stats.total_records||0).toLocaleString("pt-BR")}</div><div class="stat-lbl">Total Registros</div></div>
-            <div class="stat-mini"><div class="stat-val">${stats.total_backtests||0}</div><div class="stat-lbl">Backtests Salvos</div></div>
-            <div class="stat-mini"><div class="stat-val">${lastUpdate}</div><div class="stat-lbl">Última Atualização</div></div>
-        </div>`;
+        var lastUpdate = stats.last_auto_update ? new Date(stats.last_auto_update).toLocaleString("pt-BR") : "Nunca";
+        statsDiv.innerHTML = '<div class="stats-grid">' +
+            '<div class="stat-mini"><div class="stat-val">' + (stats.total_assets||0) + '</div><div class="stat-lbl">Total Ativos</div></div>' +
+            '<div class="stat-mini"><div class="stat-val">' + (stats.daily_assets||0) + '</div><div class="stat-lbl">Ativos Di\u00e1rios</div></div>' +
+            '<div class="stat-mini"><div class="stat-val">' + (stats.intraday_assets||0) + '</div><div class="stat-lbl">Ativos Intraday</div></div>' +
+            '<div class="stat-mini"><div class="stat-val">' + (stats.total_records||0).toLocaleString("pt-BR") + '</div><div class="stat-lbl">Total Registros</div></div>' +
+            '<div class="stat-mini"><div class="stat-val">' + (stats.total_backtests||0) + '</div><div class="stat-lbl">Backtests Salvos</div></div>' +
+            '<div class="stat-mini"><div class="stat-val">' + lastUpdate + '</div><div class="stat-lbl">\u00daltima Atualiza\u00e7\u00e3o</div></div>' +
+            '</div>';
     }
-
     loadConfigAssetsTable();
 }
 
 async function loadConfigAssetsTable() {
-    const container = document.getElementById("config-assets-table");
+    var container = document.getElementById("config-assets-table");
     if (!container) return;
-
-    const assetsData = await apiGet("/config/assets");
-    const assets = assetsData?.assets || [];
-
+    var assetsData = await apiGet("/config/assets");
+    var assets = (assetsData && assetsData.assets) ? assetsData.assets : [];
     if (assets.length === 0) {
-        container.innerHTML = '<div class="no-assets-msg"><i class="fas fa-inbox"></i><p>Nenhum ativo armazenado no Supabase.<br>Use "Baixar Dados" acima para começar.</p></div>';
+        container.innerHTML = '<div class="no-assets-msg"><i class="fas fa-inbox"></i><p>Nenhum ativo armazenado no Supabase.<br>Use "Baixar Dados" acima para come\u00e7ar.</p></div>';
         return;
     }
-
-    let html = `<div class="assets-stored-table"><div class="table-responsive">
-    <table class="table table-dark table-sm" id="config-assets-tbl">
-    <thead><tr>
-        <th>Ticker</th><th>Nome</th><th>Última Atualização</th>
-        <th>Data Início</th><th>Data Fim</th><th>Timeframe</th><th>Registros</th>
-    </tr></thead><tbody>`;
-
-    assets.forEach(a => {
-        const lastUpd = a.last_update ? new Date(a.last_update).toLocaleString("pt-BR") : "—";
-        const dailyStart = a.daily_start || "—";
-        const dailyEnd = a.daily_end || "—";
-        const intraStart = a.intraday_start || "";
-        const intraEnd = a.intraday_end || "";
-        const dailyRec = a.daily_records || 0;
-        const intraRec = a.intraday_records || 0;
-
-        if (dailyRec > 0) {
-            html += `<tr>
-                <td><strong>${a.ticker||""}</strong></td>
-                <td>${a.name||"—"}</td>
-                <td>${lastUpd}</td>
-                <td>${dailyStart}</td>
-                <td>${dailyEnd}</td>
-                <td>Diário</td>
-                <td>${dailyRec.toLocaleString("pt-BR")}</td>
-            </tr>`;
+    var html = '<div class="assets-stored-table"><div class="table-responsive">' +
+        '<table class="table table-dark table-sm" id="config-assets-tbl"><thead><tr>' +
+        '<th>Ticker</th><th>Nome</th><th>\u00daltima Atualiza\u00e7\u00e3o</th><th>Data In\u00edcio</th><th>Data Fim</th><th>Timeframe</th><th>Registros</th>' +
+        '</tr></thead><tbody>';
+    assets.forEach(function(a) {
+        var lastUpd = a.last_update ? new Date(a.last_update).toLocaleString("pt-BR") : "\u2014";
+        var dStart = a.daily_start || "\u2014", dEnd = a.daily_end || "\u2014";
+        var iStart = a.intraday_start || "", iEnd = a.intraday_end || "";
+        var dRec = a.daily_records || 0, iRec = a.intraday_records || 0;
+        if (dRec > 0) {
+            html += '<tr><td><strong>' + (a.ticker||"") + '</strong></td><td>' + (a.name||"\u2014") + '</td><td>' + lastUpd + '</td><td>' + dStart + '</td><td>' + dEnd + '</td><td>Di\u00e1rio</td><td>' + dRec.toLocaleString("pt-BR") + '</td></tr>';
         }
-        if (intraRec > 0) {
-            html += `<tr>
-                <td><strong>${a.ticker||""}</strong></td>
-                <td>${a.name||"—"}</td>
-                <td>${lastUpd}</td>
-                <td>${intraStart||"—"}</td>
-                <td>${intraEnd||"—"}</td>
-                <td>Intraday</td>
-                <td>${intraRec.toLocaleString("pt-BR")}</td>
-            </tr>`;
+        if (iRec > 0) {
+            html += '<tr><td><strong>' + (a.ticker||"") + '</strong></td><td>' + (a.name||"\u2014") + '</td><td>' + lastUpd + '</td><td>' + (iStart||"\u2014") + '</td><td>' + (iEnd||"\u2014") + '</td><td>Intraday</td><td>' + iRec.toLocaleString("pt-BR") + '</td></tr>';
         }
-        if (dailyRec === 0 && intraRec === 0) {
-            html += `<tr>
-                <td><strong>${a.ticker||""}</strong></td>
-                <td>${a.name||"—"}</td>
-                <td>${lastUpd}</td>
-                <td>—</td><td>—</td><td>—</td><td>0</td>
-            </tr>`;
+        if (dRec === 0 && iRec === 0) {
+            html += '<tr><td><strong>' + (a.ticker||"") + '</strong></td><td>' + (a.name||"\u2014") + '</td><td>' + lastUpd + '</td><td>\u2014</td><td>\u2014</td><td>\u2014</td><td>0</td></tr>';
         }
     });
-
-    html += `</tbody></table></div></div>`;
+    html += '</tbody></table></div></div>';
     container.innerHTML = html;
     makeSortable("config-assets-tbl");
 }
 
 function saveBrapiToken() {
-    const input = document.getElementById("config-brapi-token");
-    const status = document.getElementById("config-token-status");
+    var input = document.getElementById("config-brapi-token");
+    var status = document.getElementById("config-token-status");
     if (!input || !input.value.trim()) {
-        if (status) { status.className = "config-status error"; status.textContent = "Token não pode ser vazio."; }
+        if (status) { status.className = "config-status error"; status.textContent = "Token n\u00e3o pode ser vazio."; }
         return;
     }
     setBrapiToken(input.value.trim());
@@ -462,16 +357,14 @@ function saveBrapiToken() {
 }
 
 async function changeConfigPin() {
-    const oldPin = document.getElementById("config-old-pin")?.value?.trim();
-    const newPin = document.getElementById("config-new-pin")?.value?.trim();
-    const status = document.getElementById("config-pin-change-status");
-
+    var oldPin = document.getElementById("config-old-pin") ? document.getElementById("config-old-pin").value.trim() : "";
+    var newPin = document.getElementById("config-new-pin") ? document.getElementById("config-new-pin").value.trim() : "";
+    var status = document.getElementById("config-pin-change-status");
     if (!oldPin || !newPin) {
         if (status) { status.className = "config-status error"; status.textContent = "Preencha ambos os campos."; }
         return;
     }
-
-    const result = await apiPost("/config/change-pin", { old_pin: oldPin, new_pin: newPin });
+    var result = await apiPost("/config/change-pin", { old_pin: oldPin, new_pin: newPin });
     if (result && result.success) {
         setStoredPin(newPin);
         if (status) { status.className = "config-status success"; status.textContent = "PIN alterado com sucesso!"; }
@@ -482,160 +375,121 @@ async function changeConfigPin() {
     }
 }
 
-// ─── Download All Assets by Type (continua usando BRAPI para listar) ───
 async function downloadAllAssets() {
-    const pin = getStoredPin();
-    if (!pin) { alert("PIN não encontrado. Faça login novamente."); return; }
-
-    const assetType = document.getElementById("config-asset-type")?.value || "stock";
-    const timeframe = document.getElementById("config-timeframe")?.value || "daily";
-    const startDate = document.getElementById("config-start-date")?.value || "";
-    const endDate = document.getElementById("config-end-date")?.value || "";
-
-    const progressDiv = document.getElementById("config-download-progress");
-    const progressLabel = document.getElementById("config-progress-label");
-    const progressCount = document.getElementById("config-progress-count");
-    const progressBar = document.getElementById("config-progress-bar");
-    const progressLog = document.getElementById("config-progress-log");
-    const btn = document.getElementById("config-download-btn");
-
+    var pin = getStoredPin();
+    if (!pin) { alert("PIN n\u00e3o encontrado. Fa\u00e7a login novamente."); return; }
+    var assetType = document.getElementById("config-asset-type") ? document.getElementById("config-asset-type").value : "stock";
+    var timeframe = document.getElementById("config-timeframe") ? document.getElementById("config-timeframe").value : "daily";
+    var startDate = document.getElementById("config-start-date") ? document.getElementById("config-start-date").value : "";
+    var endDate = document.getElementById("config-end-date") ? document.getElementById("config-end-date").value : "";
+    var progressDiv = document.getElementById("config-download-progress");
+    var progressLabel = document.getElementById("config-progress-label");
+    var progressCount = document.getElementById("config-progress-count");
+    var progressBar = document.getElementById("config-progress-bar");
+    var progressLog = document.getElementById("config-progress-log");
+    var btn = document.getElementById("config-download-btn");
     if (progressDiv) progressDiv.style.display = "block";
     if (progressLog) progressLog.innerHTML = "";
     if (progressLabel) progressLabel.textContent = "Buscando lista de ativos...";
     if (progressBar) progressBar.style.width = "0%";
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Baixando...'; }
-
-    let tickers = [];
+    var tickers = [];
     try {
-        let brapiType = assetType;
+        var brapiType = assetType;
         if (assetType === "etf") brapiType = "stock";
-
         tickers = await fetchAllBrapiTickers(brapiType);
-
-        if (assetType === "etf") {
-            tickers = tickers.filter(t => t.endsWith("11"));
-        } else if (assetType === "stock") {
-            tickers = tickers.filter(t => !t.endsWith("11") && !t.endsWith("F"));
-        }
+        if (assetType === "etf") { tickers = tickers.filter(function(t) { return t.endsWith("11"); }); }
+        else if (assetType === "stock") { tickers = tickers.filter(function(t) { return !t.endsWith("11") && !t.endsWith("F"); }); }
     } catch (e) {
-        if (progressLog) progressLog.innerHTML = `<div class="log-error">Erro ao buscar lista: ${e.message}</div>`;
+        if (progressLog) progressLog.innerHTML = '<div class="log-error">Erro ao buscar lista: ' + e.message + '</div>';
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-download"></i> Baixar Dados'; }
         return;
     }
-
     if (tickers.length === 0) {
-        if (progressLog) progressLog.innerHTML = `<div class="log-error">Nenhum ativo encontrado para "${assetType}".</div>`;
+        if (progressLog) progressLog.innerHTML = '<div class="log-error">Nenhum ativo encontrado.</div>';
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-download"></i> Baixar Dados'; }
         return;
     }
-
-    if (progressLabel) progressLabel.textContent = `Baixando ${tickers.length} ativos...`;
-    if (progressCount) progressCount.textContent = `0/${tickers.length}`;
-
-    let successCount = 0, errorCount = 0;
-
-    for (let i = 0; i < tickers.length; i++) {
-        const ticker = tickers[i];
+    if (progressLabel) progressLabel.textContent = "Baixando " + tickers.length + " ativos...";
+    if (progressCount) progressCount.textContent = "0/" + tickers.length;
+    var successCount = 0, errorCount = 0;
+    for (var i = 0; i < tickers.length; i++) {
+        var ticker = tickers[i];
         try {
-            const result = await apiPost("/config/download-data", {
-                pin: pin,
-                ticker: ticker,
-                start_date: startDate,
-                end_date: endDate,
-                timeframe: timeframe,
-            });
+            var result = await apiPost("/config/download-data", { pin: pin, ticker: ticker, start_date: startDate, end_date: endDate, timeframe: timeframe });
             if (result && result.success) {
                 successCount++;
-                if (progressLog) progressLog.innerHTML += `<div class="log-success">✓ ${ticker} — ${result.records||0} registros</div>`;
+                if (progressLog) progressLog.innerHTML += '<div class="log-success">\u2713 ' + ticker + ' \u2014 ' + (result.records||0) + ' registros</div>';
             } else {
                 errorCount++;
-                if (progressLog) progressLog.innerHTML += `<div class="log-error">✗ ${ticker} — ${result?.message||"erro"}</div>`;
+                if (progressLog) progressLog.innerHTML += '<div class="log-error">\u2717 ' + ticker + ' \u2014 ' + (result ? result.message||"erro" : "erro") + '</div>';
             }
         } catch (e) {
             errorCount++;
-            if (progressLog) progressLog.innerHTML += `<div class="log-error">✗ ${ticker} — ${e.message}</div>`;
+            if (progressLog) progressLog.innerHTML += '<div class="log-error">\u2717 ' + ticker + ' \u2014 ' + e.message + '</div>';
         }
-
-        const pct = Math.round(((i + 1) / tickers.length) * 100);
+        var pct = Math.round(((i + 1) / tickers.length) * 100);
         if (progressBar) progressBar.style.width = pct + "%";
-        if (progressCount) progressCount.textContent = `${i + 1}/${tickers.length}`;
+        if (progressCount) progressCount.textContent = (i + 1) + "/" + tickers.length;
         if (progressLog) progressLog.scrollTop = progressLog.scrollHeight;
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise(function(r) { setTimeout(r, 300); });
     }
-
-    if (progressLabel) progressLabel.textContent = `Concluído: ${successCount} ok, ${errorCount} erros`;
+    if (progressLabel) progressLabel.textContent = "Conclu\u00eddo: " + successCount + " ok, " + errorCount + " erros";
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-download"></i> Baixar Dados'; }
     showConfigPanel();
 }
 
-// ─── Update All Assets (incremental) ───
 async function updateAllAssets() {
-    const pin = getStoredPin();
-    if (!pin) { alert("PIN não encontrado. Faça login novamente."); return; }
-
-    const timeframe = document.getElementById("config-timeframe")?.value || "daily";
-    const progressDiv = document.getElementById("config-download-progress");
-    const progressLabel = document.getElementById("config-progress-label");
-    const progressCount = document.getElementById("config-progress-count");
-    const progressBar = document.getElementById("config-progress-bar");
-    const progressLog = document.getElementById("config-progress-log");
-    const btn = document.getElementById("config-update-btn");
-
+    var pin = getStoredPin();
+    if (!pin) { alert("PIN n\u00e3o encontrado."); return; }
+    var timeframe = document.getElementById("config-timeframe") ? document.getElementById("config-timeframe").value : "daily";
+    var progressDiv = document.getElementById("config-download-progress");
+    var progressLabel = document.getElementById("config-progress-label");
+    var progressCount = document.getElementById("config-progress-count");
+    var progressBar = document.getElementById("config-progress-bar");
+    var progressLog = document.getElementById("config-progress-log");
+    var btn = document.getElementById("config-update-btn");
     if (progressDiv) progressDiv.style.display = "block";
     if (progressLog) progressLog.innerHTML = "";
     if (progressBar) progressBar.style.width = "0%";
     if (progressLabel) progressLabel.textContent = "Buscando ativos salvos...";
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Atualizando...'; }
-
-    const assetsData = await apiGet("/config/assets");
-    const assets = assetsData?.assets || [];
-
+    var assetsData = await apiGet("/config/assets");
+    var assets = (assetsData && assetsData.assets) ? assetsData.assets : [];
     if (assets.length === 0) {
-        if (progressLog) progressLog.innerHTML = '<div class="log-info">Nenhum ativo salvo. Baixe os dados primeiro.</div>';
+        if (progressLog) progressLog.innerHTML = '<div class="log-info">Nenhum ativo salvo.</div>';
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Atualizar Dados'; }
         return;
     }
-
-    if (progressLabel) progressLabel.textContent = `Atualizando ${assets.length} ativos...`;
-    if (progressCount) progressCount.textContent = `0/${assets.length}`;
-
-    const today = getTodayStr();
-    let successCount = 0, errorCount = 0;
-
-    for (let i = 0; i < assets.length; i++) {
-        const asset = assets[i];
-        const ticker = asset.ticker || asset;
-        const lastDate = asset.daily_end || asset.intraday_end || asset.last_update || "";
-        const startFrom = lastDate ? lastDate.split("T")[0] : "";
-
+    if (progressLabel) progressLabel.textContent = "Atualizando " + assets.length + " ativos...";
+    if (progressCount) progressCount.textContent = "0/" + assets.length;
+    var today = getTodayStr();
+    var successCount = 0, errorCount = 0;
+    for (var i = 0; i < assets.length; i++) {
+        var asset = assets[i];
+        var ticker = asset.ticker || asset;
+        var lastDate = asset.daily_end || asset.intraday_end || asset.last_update || "";
+        var startFrom = lastDate ? lastDate.split("T")[0] : "";
         try {
-            const result = await apiPost("/config/download-data", {
-                pin: pin,
-                ticker: ticker,
-                start_date: startFrom,
-                end_date: today,
-                timeframe: asset.timeframe || timeframe,
-            });
+            var result = await apiPost("/config/download-data", { pin: pin, ticker: ticker, start_date: startFrom, end_date: today, timeframe: asset.timeframe || timeframe });
             if (result && result.success) {
                 successCount++;
-                if (progressLog) progressLog.innerHTML += `<div class="log-success">✓ ${ticker} — ${result.records||0} novos</div>`;
+                if (progressLog) progressLog.innerHTML += '<div class="log-success">\u2713 ' + ticker + ' \u2014 ' + (result.records||0) + ' novos</div>';
             } else {
                 errorCount++;
-                if (progressLog) progressLog.innerHTML += `<div class="log-error">✗ ${ticker} — ${result?.message||"erro"}</div>`;
+                if (progressLog) progressLog.innerHTML += '<div class="log-error">\u2717 ' + ticker + ' \u2014 ' + (result ? result.message||"erro" : "erro") + '</div>';
             }
         } catch (e) {
             errorCount++;
-            if (progressLog) progressLog.innerHTML += `<div class="log-error">✗ ${ticker} — ${e.message}</div>`;
+            if (progressLog) progressLog.innerHTML += '<div class="log-error">\u2717 ' + ticker + ' \u2014 ' + e.message + '</div>';
         }
-
-        const pct = Math.round(((i + 1) / assets.length) * 100);
+        var pct = Math.round(((i + 1) / assets.length) * 100);
         if (progressBar) progressBar.style.width = pct + "%";
-        if (progressCount) progressCount.textContent = `${i + 1}/${assets.length}`;
+        if (progressCount) progressCount.textContent = (i + 1) + "/" + assets.length;
         if (progressLog) progressLog.scrollTop = progressLog.scrollHeight;
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise(function(r) { setTimeout(r, 300); });
     }
-
-    if (progressLabel) progressLabel.textContent = `Concluído: ${successCount} ok, ${errorCount} erros`;
+    if (progressLabel) progressLabel.textContent = "Conclu\u00eddo: " + successCount + " ok, " + errorCount + " erros";
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Atualizar Dados'; }
     showConfigPanel();
 }
@@ -644,62 +498,47 @@ async function updateAllAssets() {
 // B3 DAILY
 // ============================================================
 async function loadDailyPage() {
-    const entryData = await apiGet("/strategies/daily/entry");
-    if (entryData?.strategies) populateSelect("daily-entry-strategy", entryData.strategies, "pct_prev_close");
-    const exitData = await apiGet("/strategies/daily/exit");
-    if (exitData?.strategies) populateSelect("daily-exit-strategy", exitData.strategies, "close_same_day");
+    var entryData = await apiGet("/strategies/daily/entry");
+    if (entryData && entryData.strategies) populateSelect("daily-entry-strategy", entryData.strategies, "pct_prev_close");
+    var exitData = await apiGet("/strategies/daily/exit");
+    if (exitData && exitData.strategies) populateSelect("daily-exit-strategy", exitData.strategies, "close_same_day");
     setupDirectionButtons("daily-btn-compra", "daily-btn-venda", "daily-direction");
-
-    const s = document.getElementById("daily-start-date");
-    const e = document.getElementById("daily-end-date");
+    var s = document.getElementById("daily-start-date");
+    var e = document.getElementById("daily-end-date");
     if (s && !s.value) s.value = getDefaultStartDate();
     if (e && !e.value) e.value = getTodayStr();
-
-    const entrySelect = document.getElementById("daily-entry-strategy");
+    var entrySelect = document.getElementById("daily-entry-strategy");
     if (entrySelect) {
-        entrySelect.addEventListener("change", () => {
-            const varDiv = document.getElementById("daily-variation-div");
+        entrySelect.addEventListener("change", function() {
+            var varDiv = document.getElementById("daily-variation-div");
             if (!varDiv) return;
-            const needs = ["pct_prev_close","pct_prev_open","pct_current_open","pct_prev_close_sniper","pct_prev_open_sniper"];
-            varDiv.style.display = needs.includes(entrySelect.value) ? "block" : "none";
+            var needs = ["pct_prev_close","pct_prev_open","pct_current_open","pct_prev_close_sniper","pct_prev_open_sniper"];
+            varDiv.style.display = needs.indexOf(entrySelect.value) >= 0 ? "block" : "none";
         });
         entrySelect.dispatchEvent(new Event("change"));
     }
 }
 
 async function runDailyBacktest() {
-    const entryStrategy = document.getElementById("daily-entry-strategy")?.value;
-    const exitStrategy = document.getElementById("daily-exit-strategy")?.value;
-    const direction = document.getElementById("daily-direction")?.value || "compra";
-    const variationPct = parseFloat(document.getElementById("daily-variation")?.value || "0");
-    const startDate = document.getElementById("daily-start-date")?.value || "";
-    const endDate = document.getElementById("daily-end-date")?.value || "";
-    const tickersInput = document.getElementById("daily-tickers")?.value?.trim() || "";
-    const market = document.getElementById("daily-market")?.value || "";
-
-    if (!entryStrategy || !exitStrategy) { alert("Selecione as estratégias de entrada e saída."); return; }
-
-    const btn = document.getElementById("daily-run-btn");
+    var entryStrategy = document.getElementById("daily-entry-strategy") ? document.getElementById("daily-entry-strategy").value : "";
+    var exitStrategy = document.getElementById("daily-exit-strategy") ? document.getElementById("daily-exit-strategy").value : "";
+    var direction = document.getElementById("daily-direction") ? document.getElementById("daily-direction").value : "compra";
+    var variationPct = parseFloat(document.getElementById("daily-variation") ? document.getElementById("daily-variation").value : "0");
+    var startDate = document.getElementById("daily-start-date") ? document.getElementById("daily-start-date").value : "";
+    var endDate = document.getElementById("daily-end-date") ? document.getElementById("daily-end-date").value : "";
+    var tickersInput = document.getElementById("daily-tickers") ? document.getElementById("daily-tickers").value.trim() : "";
+    var marketSel = document.getElementById("daily-market") ? document.getElementById("daily-market").value : "b3";
+    if (!entryStrategy || !exitStrategy) { alert("Selecione as estrat\u00e9gias de entrada e sa\u00edda."); return; }
+    var btn = document.getElementById("daily-run-btn");
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...'; }
-
     try {
-        const body = {
-            entry_strategy: entryStrategy,
-            exit_strategy: exitStrategy,
-            direction,
-            variation_pct: variationPct,
-            start_date: startDate || null,
-            end_date: endDate || null
-        };
-
-        if (tickersInput) {
-            body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
+        var body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction: direction, variation_pct: variationPct, start_date: startDate || null, end_date: endDate || null };
+        if (marketSel === "custom" && tickersInput) {
+            body.tickers = tickersInput.split(",").map(function(t) { return t.trim().toUpperCase(); }).filter(function(t) { return t; });
         } else {
-            // "B3 — Todos" ou default: envia market para o backend resolver via Supabase
             body.market = "b3";
         }
-
-        const result = await apiPost("/backtest/daily", body);
+        var result = await apiPost("/backtest/daily", body);
         if (!result) { alert("Erro ao executar backtest."); return; }
         displayResults("daily-results", "daily-results-table", result);
     } catch (e) {
@@ -714,55 +553,39 @@ async function runDailyBacktest() {
 // B3 INTRADAY
 // ============================================================
 async function loadIntradayPage() {
-    const entryData = await apiGet("/strategies/intraday/entry");
-    if (entryData?.strategies) populateSelect("intra-entry-strategy", entryData.strategies, "intra_pct_prev_close");
-    const exitData = await apiGet("/strategies/intraday/exit");
-    if (exitData?.strategies) populateSelect("intra-exit-strategy", exitData.strategies, "intra_exit_day_close");
+    var entryData = await apiGet("/strategies/intraday/entry");
+    if (entryData && entryData.strategies) populateSelect("intra-entry-strategy", entryData.strategies, "intra_pct_prev_close");
+    var exitData = await apiGet("/strategies/intraday/exit");
+    if (exitData && exitData.strategies) populateSelect("intra-exit-strategy", exitData.strategies, "intra_exit_day_close");
     setupDirectionButtons("intra-btn-compra", "intra-btn-venda", "intra-direction");
-    const s = document.getElementById("intra-start-date");
-    const e = document.getElementById("intra-end-date");
+    var s = document.getElementById("intra-start-date");
+    var e = document.getElementById("intra-end-date");
     if (s && !s.value) s.value = getDefaultStartDate();
     if (e && !e.value) e.value = getTodayStr();
 }
 
 async function runIntradayBacktest() {
-    const entryStrategy = document.getElementById("intra-entry-strategy")?.value;
-    const exitStrategy = document.getElementById("intra-exit-strategy")?.value;
-    const direction = document.getElementById("intra-direction")?.value || "compra";
-    const variationPct = parseFloat(document.getElementById("intra-variation")?.value || "0");
-    const hourStart = document.getElementById("intra-hour-start")?.value || "09:00";
-    const hourEnd = document.getElementById("intra-hour-end")?.value || "17:00";
-    const startDate = document.getElementById("intra-start-date")?.value || "";
-    const endDate = document.getElementById("intra-end-date")?.value || "";
-    const tickersInput = document.getElementById("intra-tickers")?.value?.trim() || "";
-    const market = document.getElementById("intra-market")?.value || "";
-
-    if (!entryStrategy || !exitStrategy) { alert("Selecione as estratégias."); return; }
-
-    const btn = document.getElementById("intra-run-btn");
+    var entryStrategy = document.getElementById("intra-entry-strategy") ? document.getElementById("intra-entry-strategy").value : "";
+    var exitStrategy = document.getElementById("intra-exit-strategy") ? document.getElementById("intra-exit-strategy").value : "";
+    var direction = document.getElementById("intra-direction") ? document.getElementById("intra-direction").value : "compra";
+    var variationPct = parseFloat(document.getElementById("intra-variation") ? document.getElementById("intra-variation").value : "0");
+    var hourStart = document.getElementById("intra-hour-start") ? document.getElementById("intra-hour-start").value : "09:00";
+    var hourEnd = document.getElementById("intra-hour-end") ? document.getElementById("intra-hour-end").value : "17:00";
+    var startDate = document.getElementById("intra-start-date") ? document.getElementById("intra-start-date").value : "";
+    var endDate = document.getElementById("intra-end-date") ? document.getElementById("intra-end-date").value : "";
+    var tickersInput = document.getElementById("intra-tickers") ? document.getElementById("intra-tickers").value.trim() : "";
+    var marketSel = document.getElementById("intra-market") ? document.getElementById("intra-market").value : "b3";
+    if (!entryStrategy || !exitStrategy) { alert("Selecione as estrat\u00e9gias."); return; }
+    var btn = document.getElementById("intra-run-btn");
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...'; }
-
     try {
-        const body = {
-            entry_strategy: entryStrategy,
-            exit_strategy: exitStrategy,
-            direction,
-            variation_pct: variationPct,
-            hour_start: hourStart,
-            hour_end: hourEnd,
-            period: "3mo",
-            start_date: startDate || null,
-            end_date: endDate || null
-        };
-
-        if (tickersInput) {
-            body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
+        var body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction: direction, variation_pct: variationPct, hour_start: hourStart, hour_end: hourEnd, period: "3mo", start_date: startDate || null, end_date: endDate || null };
+        if (marketSel === "custom" && tickersInput) {
+            body.tickers = tickersInput.split(",").map(function(t) { return t.trim().toUpperCase(); }).filter(function(t) { return t; });
         } else {
-            // "B3 — Todos": envia market para o backend resolver via Supabase
             body.market = "b3";
         }
-
-        const result = await apiPost("/backtest/intraday", body);
+        var result = await apiPost("/backtest/intraday", body);
         if (!result) { alert("Erro ao executar backtest intraday."); return; }
         displayResults("intra-results", "intra-results-table", result);
     } catch (e) {
@@ -777,53 +600,39 @@ async function runIntradayBacktest() {
 // BMF INTRADAY
 // ============================================================
 async function loadBmfIntradayPage() {
-    const entryData = await apiGet("/strategies/intraday/entry");
-    if (entryData?.strategies) populateSelect("bmf-entry-strategy", entryData.strategies, "intra_pct_prev_close");
-    const exitData = await apiGet("/strategies/intraday/exit");
-    if (exitData?.strategies) populateSelect("bmf-exit-strategy", exitData.strategies, "intra_exit_day_close");
+    var entryData = await apiGet("/strategies/intraday/entry");
+    if (entryData && entryData.strategies) populateSelect("bmf-entry-strategy", entryData.strategies, "intra_pct_prev_close");
+    var exitData = await apiGet("/strategies/intraday/exit");
+    if (exitData && exitData.strategies) populateSelect("bmf-exit-strategy", exitData.strategies, "intra_exit_day_close");
     setupDirectionButtons("bmf-btn-compra", "bmf-btn-venda", "bmf-direction");
-    const s = document.getElementById("bmf-start-date");
-    const e = document.getElementById("bmf-end-date");
+    var s = document.getElementById("bmf-start-date");
+    var e = document.getElementById("bmf-end-date");
     if (s && !s.value) s.value = getDefaultStartDate();
     if (e && !e.value) e.value = getTodayStr();
 }
 
 async function runBmfIntradayBacktest() {
-    const entryStrategy = document.getElementById("bmf-entry-strategy")?.value;
-    const exitStrategy = document.getElementById("bmf-exit-strategy")?.value;
-    const direction = document.getElementById("bmf-direction")?.value || "compra";
-    const variationPct = parseFloat(document.getElementById("bmf-variation")?.value || "0");
-    const hourStart = document.getElementById("bmf-hour-start")?.value || "09:00";
-    const hourEnd = document.getElementById("bmf-hour-end")?.value || "17:00";
-    const startDate = document.getElementById("bmf-start-date")?.value || "";
-    const endDate = document.getElementById("bmf-end-date")?.value || "";
-    const tickersInput = document.getElementById("bmf-tickers")?.value?.trim() || "";
-
-    if (!entryStrategy || !exitStrategy) { alert("Selecione as estratégias."); return; }
-
-    const btn = document.getElementById("bmf-run-btn");
+    var entryStrategy = document.getElementById("bmf-entry-strategy") ? document.getElementById("bmf-entry-strategy").value : "";
+    var exitStrategy = document.getElementById("bmf-exit-strategy") ? document.getElementById("bmf-exit-strategy").value : "";
+    var direction = document.getElementById("bmf-direction") ? document.getElementById("bmf-direction").value : "compra";
+    var variationPct = parseFloat(document.getElementById("bmf-variation") ? document.getElementById("bmf-variation").value : "0");
+    var hourStart = document.getElementById("bmf-hour-start") ? document.getElementById("bmf-hour-start").value : "09:00";
+    var hourEnd = document.getElementById("bmf-hour-end") ? document.getElementById("bmf-hour-end").value : "17:00";
+    var startDate = document.getElementById("bmf-start-date") ? document.getElementById("bmf-start-date").value : "";
+    var endDate = document.getElementById("bmf-end-date") ? document.getElementById("bmf-end-date").value : "";
+    var tickersInput = document.getElementById("bmf-tickers") ? document.getElementById("bmf-tickers").value.trim() : "";
+    var marketSel = document.getElementById("bmf-market") ? document.getElementById("bmf-market").value : "bmf";
+    if (!entryStrategy || !exitStrategy) { alert("Selecione as estrat\u00e9gias."); return; }
+    var btn = document.getElementById("bmf-run-btn");
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...'; }
-
     try {
-        const body = {
-            entry_strategy: entryStrategy,
-            exit_strategy: exitStrategy,
-            direction,
-            variation_pct: variationPct,
-            hour_start: hourStart,
-            hour_end: hourEnd,
-            period: "3mo",
-            start_date: startDate || null,
-            end_date: endDate || null
-        };
-
-        if (tickersInput) {
-            body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
+        var body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction: direction, variation_pct: variationPct, hour_start: hourStart, hour_end: hourEnd, period: "3mo", start_date: startDate || null, end_date: endDate || null };
+        if (marketSel === "custom" && tickersInput) {
+            body.tickers = tickersInput.split(",").map(function(t) { return t.trim().toUpperCase(); }).filter(function(t) { return t; });
         } else {
             body.market = "bmf";
         }
-
-        const result = await apiPost("/backtest/intraday", body);
+        var result = await apiPost("/backtest/intraday", body);
         if (!result) { alert("Erro ao executar backtest BMF."); return; }
         displayResults("bmf-results", "bmf-results-table", result);
     } catch (e) {
@@ -838,23 +647,17 @@ async function runBmfIntradayBacktest() {
 // SHARED RESULTS DISPLAY
 // ============================================================
 function displayResults(containerId, tableId, result) {
-    const container = document.getElementById(containerId);
+    var container = document.getElementById(containerId);
     if (!container) return;
 
-    let rows = [];
+    var rows = [];
     if (result.ticker && result.metrics) {
-        const m = result.metrics;
+        var m = result.metrics;
         rows.push({
-            acao: result.ticker,
-            total_gain: m.total_gain,
-            pct_gain: m.pct_gain,
-            total_loss: m.total_loss,
-            pct_loss: m.pct_loss,
-            total_trades: m.total_trades,
-            resultado_pct: m.resultado_pct,
-            max_drawdown_pct: m.max_drawdown_pct,
-            ganho_maximo_pct: m.ganho_maximo_pct,
-            ganho_medio_pct: m.ganho_medio_pct,
+            acao: result.ticker, total_gain: m.total_gain, pct_gain: m.pct_gain,
+            total_loss: m.total_loss, pct_loss: m.pct_loss, total_trades: m.total_trades,
+            resultado_pct: m.resultado_pct, max_drawdown_pct: m.max_drawdown_pct,
+            ganho_maximo_pct: m.ganho_maximo_pct, ganho_medio_pct: m.ganho_medio_pct,
             volume_medio: m.volume_medio
         });
     } else if (result.results) {
@@ -866,59 +669,57 @@ function displayResults(containerId, tableId, result) {
         return;
     }
 
-    // Inject scoped scrollbar style
-    const styleId = tableId + "-scroll-style";
-    let styleEl = document.getElementById(styleId);
+    var styleId = tableId + "-scroll-style";
+    var styleEl = document.getElementById(styleId);
     if (!styleEl) {
         styleEl = document.createElement("style");
         styleEl.id = styleId;
         document.head.appendChild(styleEl);
     }
-    styleEl.textContent = `
-        #${containerId} .results-scroll-wrapper::-webkit-scrollbar { height: 12px; }
-        #${containerId} .results-scroll-wrapper::-webkit-scrollbar-track { background: #0a0a1a; border-radius: 6px; }
-        #${containerId} .results-scroll-wrapper::-webkit-scrollbar-thumb { background: #00d4a1; border-radius: 6px; }
-        #${containerId} .results-scroll-wrapper::-webkit-scrollbar-thumb:hover { background: #00b88a; }
-    `;
+    styleEl.textContent = "#" + containerId + " .results-scroll-wrapper::-webkit-scrollbar{height:12px}" +
+        "#" + containerId + " .results-scroll-wrapper::-webkit-scrollbar-track{background:#0a0a1a;border-radius:6px}" +
+        "#" + containerId + " .results-scroll-wrapper::-webkit-scrollbar-thumb{background:#00d4a1;border-radius:6px}" +
+        "#" + containerId + " .results-scroll-wrapper::-webkit-scrollbar-thumb:hover{background:#00b88a}";
 
-    const thStyle = "padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;";
-    const tdStyle = "padding:.6rem .8rem;border-bottom:1px solid rgba(255,255,255,0.04);color:#e0e0e0;";
+    var thS = "padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;";
+    var tdS = "padding:.6rem .8rem;border-bottom:1px solid rgba(255,255,255,0.04);color:#e0e0e0;";
 
-    let tableHTML = `<table id="${tableId}" style="min-width:1400px;width:max-content;white-space:nowrap;table-layout:auto;border-collapse:collapse;font-size:.83rem;">
-        <thead><tr>
-            <th style="${thStyle}">AÇÃO</th>
-            <th style="${thStyle}">TOTAL GAIN</th>
-            <th style="${thStyle}">% GAIN</th>
-            <th style="${thStyle}">TOTAL LOSS</th>
-            <th style="${thStyle}">% LOSS</th>
-            <th style="${thStyle}">TOTAL TRADES</th>
-            <th style="${thStyle}">RESULTADO %</th>
-            <th style="${thStyle}">MAX DRAWDOWN %</th>
-            <th style="${thStyle}">GANHO MÁXIMO %</th>
-            <th style="${thStyle}">GANHO MÉDIO %</th>
-            <th style="${thStyle}">VOLUME MÉDIO</th>
-        </tr></thead><tbody>`;
+    var t = '<table id="' + tableId + '" style="min-width:1400px;width:max-content;white-space:nowrap;table-layout:auto;border-collapse:collapse;font-size:.83rem;">';
+    t += '<thead><tr>';
+    t += '<th style="' + thS + '">A\u00c7\u00c3O</th>';
+    t += '<th style="' + thS + '">TOTAL GAIN</th>';
+    t += '<th style="' + thS + '">% GAIN</th>';
+    t += '<th style="' + thS + '">TOTAL LOSS</th>';
+    t += '<th style="' + thS + '">% LOSS</th>';
+    t += '<th style="' + thS + '">TOTAL TRADES</th>';
+    t += '<th style="' + thS + '">RESULTADO %</th>';
+    t += '<th style="' + thS + '">MAX DRAWDOWN %</th>';
+    t += '<th style="' + thS + '">GANHO M\u00c1XIMO %</th>';
+    t += '<th style="' + thS + '">GANHO M\u00c9DIO %</th>';
+    t += '<th style="' + thS + '">VOLUME M\u00c9DIO</th>';
+    t += '</tr></thead><tbody>';
 
-    rows.forEach(function(r) {
-        const cls = (r.resultado_pct || 0) >= 0 ? "color:#00d4a1" : "color:#ff4757";
-        tableHTML += `<tr>
-            <td style="${tdStyle}"><strong>${r.acao || ""}</strong></td>
-            <td style="${tdStyle}">${r.total_gain || 0}</td>
-            <td style="${tdStyle}">${fmtPct(r.pct_gain)}</td>
-            <td style="${tdStyle}">${r.total_loss || 0}</td>
-            <td style="${tdStyle}">${fmtPct(r.pct_loss)}</td>
-            <td style="${tdStyle}">${r.total_trades || 0}</td>
-            <td style="${tdStyle};${cls};font-weight:700;">${fmtPct(r.resultado_pct)}</td>
-            <td style="${tdStyle}">${fmtPct(r.max_drawdown_pct)}</td>
-            <td style="${tdStyle}">${fmtPct(r.ganho_maximo_pct)}</td>
-            <td style="${tdStyle}">${fmtPct(r.ganho_medio_pct)}</td>
-            <td style="${tdStyle}">${fmtVol(r.volume_medio)}</td>
-        </tr>`;
-    });
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var cls = (r.resultado_pct || 0) >= 0 ? "color:#00d4a1" : "color:#ff4757";
+        t += '<tr>';
+        t += '<td style="' + tdS + '"><strong>' + (r.acao || "") + '</strong></td>';
+        t += '<td style="' + tdS + '">' + (r.total_gain || 0) + '</td>';
+        t += '<td style="' + tdS + '">' + fmtPct(r.pct_gain) + '</td>';
+        t += '<td style="' + tdS + '">' + (r.total_loss || 0) + '</td>';
+        t += '<td style="' + tdS + '">' + fmtPct(r.pct_loss) + '</td>';
+        t += '<td style="' + tdS + '">' + (r.total_trades || 0) + '</td>';
+        t += '<td style="' + tdS + cls + ';font-weight:700;">' + fmtPct(r.resultado_pct) + '</td>';
+        t += '<td style="' + tdS + '">' + fmtPct(r.max_drawdown_pct) + '</td>';
+        t += '<td style="' + tdS + '">' + fmtPct(r.ganho_maximo_pct) + '</td>';
+        t += '<td style="' + tdS + '">' + fmtPct(r.ganho_medio_pct) + '</td>';
+        t += '<td style="' + tdS + '">' + fmtVol(r.volume_medio) + '</td>';
+        t += '</tr>';
+    }
 
-    tableHTML += `</tbody></table>`;
+    t += '</tbody></table>';
 
-    container.innerHTML = `<div class="results-scroll-wrapper" style="overflow-x:auto;overflow-y:visible;width:100%;display:block;-webkit-overflow-scrolling:touch;padding-bottom:4px;">${tableHTML}</div>`;
+    container.innerHTML = '<div class="results-scroll-wrapper" style="overflow-x:auto;overflow-y:visible;width:100%;display:block;-webkit-overflow-scrolling:touch;padding-bottom:4px;">' + t + '</div>';
 
     makeSortable(tableId);
 }
@@ -927,25 +728,11 @@ function displayResults(containerId, tableId, result) {
 // INITIALIZATION
 // ============================================================
 document.addEventListener("DOMContentLoaded", function() {
-    // Nav links
     document.querySelectorAll(".nav-link[data-page]").forEach(function(link) {
         link.addEventListener("click", function(e) {
             e.preventDefault();
             navigate(link.getAttribute("data-page"));
         });
     });
-
-    // Start on daily page
-    navigate("daily");
-});
-
-    // Market status
-    const dot = document.getElementById("marketDot");
-    if (dot) {
-        const isOpen = Utils.isMarketOpen();
-        dot.style.background = isOpen ? "#00d4a1" : "#ff4757";
-    }
-
-    // Load dashboard
     navigate("daily");
 });
