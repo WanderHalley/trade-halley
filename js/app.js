@@ -933,7 +933,7 @@ function displayResults(containerId, tableId, result) {
         </div>
     </div>`;
 
-    container.innerHTML = `<div class="results-scroll-wrapper" style="overflow-x:auto;overflow-y:visible;width:100%;display:block;-webkit-overflow-scrolling:touch;padding-bottom:4px;">${tableHTML}</div>${summaryHTML}`;
+    container.innerHTML = `<div class="results-scroll-wrapper" style="overflow-x:auto;overflow-y:visible;width:100%;display:block;-webkit-overflow-scrolling:touch;padding-bottom:4px;">${tableHTML}</div>`;
 
     makeSortable(tableId);
 }
