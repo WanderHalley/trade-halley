@@ -1,5 +1,5 @@
 // ============================================================
-// js/app.js — Trade Halley Frontend v3.2 (FIXED)
+// js/app.js — Trade Halley Frontend v3.2 (COMPLETE + EXPORT)
 // ============================================================
 
 var API_BASE = "https://wanderhalleylee-trade-halley.hf.space";
@@ -10,13 +10,9 @@ function getStoredPin() { return localStorage.getItem("config_pin") || ""; }
 function setStoredPin(pin) { localStorage.setItem("config_pin", pin); }
 
 // ============================================================
-// ABORT CONTROLLERS — cancela requisição anterior ao re-executar
+// ABORT CONTROLLERS
 // ============================================================
-var backtestControllers = {
-    daily: null,
-    intraday: null,
-    bmf: null
-};
+var backtestControllers = { daily: null, intraday: null, bmf: null };
 
 function abortPrevious(key) {
     if (backtestControllers[key]) {
@@ -528,15 +524,11 @@ async function loadDailyPage() {
 }
 
 async function runDailyBacktest() {
-    // 1) Cancela requisição anterior se existir
     abortPrevious("daily");
-    // 2) Limpa resultados anteriores
     var resultsDiv = document.getElementById("daily-results");
     if (resultsDiv) resultsDiv.innerHTML = "";
-    // 3) Cria novo controller
     var controller = new AbortController();
     backtestControllers.daily = controller;
-
     var entryStrategy = document.getElementById("daily-entry-strategy") ? document.getElementById("daily-entry-strategy").value : "";
     var exitStrategy = document.getElementById("daily-exit-strategy") ? document.getElementById("daily-exit-strategy").value : "";
     var direction = document.getElementById("daily-direction") ? document.getElementById("daily-direction").value : "compra";
@@ -554,7 +546,7 @@ async function runDailyBacktest() {
             body.tickers = tickersInput.split(",").map(function(t) { return t.trim().toUpperCase(); }).filter(function(t) { return t; });
         } else { body.market = "b3"; }
         var result = await apiPost("/backtest/daily", body, controller.signal);
-        if (result === "__ABORTED__") return; // foi cancelado, não faz nada
+        if (result === "__ABORTED__") return;
         if (!result) { alert("Erro ao executar backtest."); return; }
         displayResults("daily-results", "daily-results-table", result);
     } catch (e) {
@@ -588,7 +580,6 @@ async function runIntradayBacktest() {
     if (resultsDiv) resultsDiv.innerHTML = "";
     var controller = new AbortController();
     backtestControllers.intraday = controller;
-
     var entryStrategy = document.getElementById("intra-entry-strategy") ? document.getElementById("intra-entry-strategy").value : "";
     var exitStrategy = document.getElementById("intra-exit-strategy") ? document.getElementById("intra-exit-strategy").value : "";
     var direction = document.getElementById("intra-direction") ? document.getElementById("intra-direction").value : "compra";
@@ -642,7 +633,6 @@ async function runBmfIntradayBacktest() {
     if (resultsDiv) resultsDiv.innerHTML = "";
     var controller = new AbortController();
     backtestControllers.bmf = controller;
-
     var entryStrategy = document.getElementById("bmf-entry-strategy") ? document.getElementById("bmf-entry-strategy").value : "";
     var exitStrategy = document.getElementById("bmf-exit-strategy") ? document.getElementById("bmf-exit-strategy").value : "";
     var direction = document.getElementById("bmf-direction") ? document.getElementById("bmf-direction").value : "compra";
@@ -676,12 +666,13 @@ async function runBmfIntradayBacktest() {
 }
 
 // ============================================================
-// SHARED RESULTS DISPLAY (COMPLETE)
+// DISPLAY RESULTS (COMPLETE) + EXPORT BUTTONS
 // ============================================================
 function displayResults(containerId, tableId, result) {
     var container = document.getElementById(containerId);
     if (!container) return;
 
+    // --- Normaliza rows ---
     var rows = [];
     if (result.ticker && result.metrics) {
         var m = result.metrics;
@@ -701,66 +692,227 @@ function displayResults(containerId, tableId, result) {
         return;
     }
 
-    var styleId = tableId + "-scroll-style";
-    var styleEl = document.getElementById(styleId);
-    if (!styleEl) {
-        styleEl = document.createElement("style");
-        styleEl.id = styleId;
-        document.head.appendChild(styleEl);
-    }
-    styleEl.textContent =
-        "#" + containerId + " .results-scroll-wrapper::-webkit-scrollbar{height:14px!important;display:block!important}" +
-        "#" + containerId + " .results-scroll-wrapper::-webkit-scrollbar-track{background:#0a0a1a;border-radius:7px}" +
-        "#" + containerId + " .results-scroll-wrapper::-webkit-scrollbar-thumb{background:#00d4a1;border-radius:7px;border:2px solid #0a0a1a}" +
-        "#" + containerId + " .results-scroll-wrapper::-webkit-scrollbar-thumb:hover{background:#00b88a}";
+    // --- Gera HTML ---
+    var thS = 'style="padding:8px 12px;background:#12122a;color:#8888aa;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;text-align:center"';
+    var thSL = 'style="padding:8px 12px;background:#12122a;color:#8888aa;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;text-align:left"';
 
-    var thS = "padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;text-align:center;";
-    var thSL = "padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;text-align:left;";
-    var tdS = "padding:.6rem .8rem;border-bottom:1px solid rgba(255,255,255,0.04);color:#e0e0e0;white-space:nowrap;text-align:center;";
-    var tdSL = "padding:.6rem .8rem;border-bottom:1px solid rgba(255,255,255,0.04);color:#e0e0e0;white-space:nowrap;text-align:left;";
+    var t = '';
 
-    var t = '<table id="' + tableId + '" style="min-width:1400px;width:max-content;white-space:nowrap;table-layout:auto;border-collapse:collapse;font-size:.83rem;">';
+    // --- Export buttons bar ---
+    t += '<div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-bottom:0.8rem;margin-top:1rem;flex-wrap:wrap">';
+    t += '<button onclick="exportResultsPDF(\'' + tableId + '\')" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;border:1px solid rgba(255,71,87,0.4);background:rgba(255,71,87,0.1);color:#ff4757;font-size:0.8rem;font-weight:600;cursor:pointer;font-family:Inter,sans-serif;transition:all .2s ease" onmouseover="this.style.background=\'rgba(255,71,87,0.2)\';this.style.borderColor=\'#ff4757\'" onmouseout="this.style.background=\'rgba(255,71,87,0.1)\';this.style.borderColor=\'rgba(255,71,87,0.4)\'">';
+    t += '<i class="fas fa-file-pdf"></i> Baixar PDF</button>';
+    t += '<button onclick="exportResultsXLSX(\'' + tableId + '\')" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;border:1px solid rgba(0,212,161,0.4);background:rgba(0,212,161,0.1);color:#00d4a1;font-size:0.8rem;font-weight:600;cursor:pointer;font-family:Inter,sans-serif;transition:all .2s ease" onmouseover="this.style.background=\'rgba(0,212,161,0.2)\';this.style.borderColor=\'#00d4a1\'" onmouseout="this.style.background=\'rgba(0,212,161,0.1)\';this.style.borderColor=\'rgba(0,212,161,0.4)\'">';
+    t += '<i class="fas fa-file-excel"></i> Baixar XLSX</button>';
+    t += '</div>';
+
+    // --- Table ---
+    t += '<div class="results-scroll-wrapper">';
+    t += '<table class="table table-dark table-sm" id="' + tableId + '" style="min-width:900px;margin:0">';
     t += '<thead><tr>';
-    t += '<th style="' + thSL + '">A\u00c7\u00c3O</th>';
-    t += '<th style="' + thS + '">TOTAL GAIN</th>';
-    t += '<th style="' + thS + '">% GAIN</th>';
-    t += '<th style="' + thS + '">TOTAL LOSS</th>';
-    t += '<th style="' + thS + '">% LOSS</th>';
-    t += '<th style="' + thS + '">TOTAL TRADES</th>';
-    t += '<th style="' + thS + '">RESULTADO %</th>';
-    t += '<th style="' + thS + '">MAX DRAWDOWN %</th>';
-    t += '<th style="' + thS + '">GANHO M\u00c1XIMO %</th>';
-    t += '<th style="' + thS + '">GANHO M\u00c9DIO %</th>';
-    t += '<th style="' + thS + '">VOLUME M\u00c9DIO</th>';
+    t += '<th ' + thSL + '>A\u00c7\u00c3O</th>';
+    t += '<th ' + thS + '>TOTAL GAIN</th>';
+    t += '<th ' + thS + '>% GAIN</th>';
+    t += '<th ' + thS + '>TOTAL LOSS</th>';
+    t += '<th ' + thS + '>% LOSS</th>';
+    t += '<th ' + thS + '>TOTAL TRADES</th>';
+    t += '<th ' + thS + '>RESULTADO %</th>';
+    t += '<th ' + thS + '>MAX DRAWDOWN %</th>';
+    t += '<th ' + thS + '>GANHO M\u00c1XIMO %</th>';
     t += '</tr></thead><tbody>';
 
-    for (var i = 0; i < rows.length; i++) {
-        var r = rows[i];
-        var resColor = (r.resultado_pct || 0) >= 0 ? "color:#00d4a1" : "color:#ff4757";
-        var ddColor = (r.max_drawdown_pct || 0) < 0 ? "color:#ff4757" : "color:#e0e0e0";
-        var gmColor = (r.ganho_maximo_pct || 0) > 0 ? "color:#00d4a1" : "color:#e0e0e0";
-        var gaColor = (r.ganho_medio_pct || 0) > 0 ? "color:#00d4a1" : (r.ganho_medio_pct || 0) < 0 ? "color:#ff4757" : "color:#e0e0e0";
+    var tdS = 'padding:7px 12px;border-bottom:1px solid rgba(255,255,255,0.03);font-size:0.83rem;text-align:center;white-space:nowrap';
+    var tdSL = 'padding:7px 12px;border-bottom:1px solid rgba(255,255,255,0.03);font-size:0.83rem;text-align:left;white-space:nowrap';
+    var totalGains = 0, totalLosses = 0, totalTrades = 0;
+
+    rows.forEach(function(r) {
+        var ticker = r.acao || r.ticker || "";
+        var tGain = r.total_gain || 0;
+        var pGain = r.pct_gain || 0;
+        var tLoss = r.total_loss || 0;
+        var pLoss = r.pct_loss || 0;
+        var trades = r.total_trades || 0;
+        var resultado = r.resultado_pct || 0;
+        var drawdown = r.max_drawdown_pct || 0;
+        var ganhoMax = r.ganho_maximo_pct || 0;
+
+        totalGains += tGain;
+        totalLosses += tLoss;
+        totalTrades += trades;
+
+        var resColor = resultado >= 0 ? '#00d4a1' : '#ff4757';
+        var ddColor = drawdown <= 0 ? '#ff4757' : '#8888aa';
 
         t += '<tr>';
-        t += '<td style="' + tdSL + '"><strong>' + (r.acao || r.ticker || "") + '</strong></td>';
-        t += '<td style="' + tdS + 'color:#00d4a1">' + (r.total_gain || 0) + '</td>';
-        t += '<td style="' + tdS + 'color:#00d4a1">' + fmtPct(r.pct_gain) + '</td>';
-        t += '<td style="' + tdS + 'color:#ff4757">' + (r.total_loss || 0) + '</td>';
-        t += '<td style="' + tdS + 'color:#ff4757">' + fmtPct(r.pct_loss) + '</td>';
-        t += '<td style="' + tdS + '">' + (r.total_trades || 0) + '</td>';
-        t += '<td style="' + tdS + resColor + ';font-weight:700">' + fmtPct(r.resultado_pct) + '</td>';
-        t += '<td style="' + tdS + ddColor + '">' + fmtPct(r.max_drawdown_pct) + '</td>';
-        t += '<td style="' + tdS + gmColor + '">' + fmtPct(r.ganho_maximo_pct) + '</td>';
-        t += '<td style="' + tdS + gaColor + '">' + fmtPct(r.ganho_medio_pct) + '</td>';
-        t += '<td style="' + tdS + '">' + fmtVol(r.volume_medio) + '</td>';
+        t += '<td style="' + tdSL + '"><strong>' + ticker + '</strong></td>';
+        t += '<td style="' + tdS + ';color:#00d4a1">' + tGain + '</td>';
+        t += '<td style="' + tdS + ';color:#00d4a1">' + fmtPct(pGain) + '</td>';
+        t += '<td style="' + tdS + ';color:#ff4757">' + tLoss + '</td>';
+        t += '<td style="' + tdS + ';color:#ff4757">' + fmtPct(pLoss) + '</td>';
+        t += '<td style="' + tdS + '">' + trades + '</td>';
+        t += '<td style="' + tdS + ';color:' + resColor + ';font-weight:700">' + fmtPct(resultado) + '</td>';
+        t += '<td style="' + tdS + ';color:' + ddColor + '">' + fmtPct(drawdown) + '</td>';
+        t += '<td style="' + tdS + ';color:#4facfe">' + fmtPct(ganhoMax) + '</td>';
         t += '</tr>';
-    }
+    });
 
-    t += '</tbody></table>';
+    t += '</tbody></table></div>';
 
-    container.innerHTML = '<div class="results-scroll-wrapper">' + t + '</div>';
+    // --- Summary ---
+    t += '<div style="margin-top:0.8rem;padding:0.7rem 1rem;background:rgba(18,18,48,0.55);border:1px solid rgba(255,255,255,0.06);border-radius:8px;display:flex;flex-wrap:wrap;gap:1.5rem;font-size:0.82rem;color:#8888aa">';
+    t += '<span>Ativos: <strong style="color:#eeeef5">' + rows.length + '</strong></span>';
+    t += '<span>Total Trades: <strong style="color:#eeeef5">' + totalTrades + '</strong></span>';
+    t += '<span>Gains: <strong style="color:#00d4a1">' + totalGains + '</strong></span>';
+    t += '<span>Losses: <strong style="color:#ff4757">' + totalLosses + '</strong></span>';
+    t += '</div>';
+
+    container.innerHTML = t;
     makeSortable(tableId);
 }
+
 // ============================================================
-// END OF FILE
+// EXPORT PDF (jsPDF + autoTable)
 // ============================================================
+function exportResultsPDF(tableId) {
+    var table = document.getElementById(tableId);
+    if (!table) { alert("Nenhuma tabela encontrada."); return; }
+
+    var jsPDF = window.jspdf ? window.jspdf.jsPDF : null;
+    if (!jsPDF) { alert("Biblioteca jsPDF n\u00e3o carregada. Recarregue a p\u00e1gina."); return; }
+
+    var doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    var now = new Date();
+    var dateStr = now.toLocaleDateString("pt-BR") + " " + now.toLocaleTimeString("pt-BR");
+
+    // Title
+    doc.setFontSize(16);
+    doc.setTextColor(0, 212, 161);
+    doc.text("Trade Halley - Resultado Backtest", 14, 15);
+
+    // Date
+    doc.setFontSize(9);
+    doc.setTextColor(136, 136, 170);
+    doc.text("Exportado em: " + dateStr, 14, 22);
+
+    // Extract headers
+    var headers = [];
+    table.querySelectorAll("thead th").forEach(function(th) {
+        var text = th.textContent.replace(/[\u21C5\u25B2\u25BC]/g, "").trim();
+        headers.push(text);
+    });
+
+    // Extract body
+    var body = [];
+    table.querySelectorAll("tbody tr").forEach(function(tr) {
+        var row = [];
+        tr.querySelectorAll("td").forEach(function(td) {
+            row.push(td.textContent.trim());
+        });
+        if (row.length > 0) body.push(row);
+    });
+
+    // autoTable
+    doc.autoTable({
+        head: [headers],
+        body: body,
+        startY: 27,
+        theme: "grid",
+        styles: {
+            fontSize: 7.5,
+            cellPadding: 2,
+            textColor: [238, 238, 245],
+            fillColor: [16, 16, 40],
+            lineColor: [40, 40, 80],
+            lineWidth: 0.2,
+            halign: "center",
+            font: "helvetica"
+        },
+        headStyles: {
+            fillColor: [18, 18, 42],
+            textColor: [0, 212, 161],
+            fontStyle: "bold",
+            fontSize: 7,
+            halign: "center"
+        },
+        columnStyles: {
+            0: { halign: "left", fontStyle: "bold" }
+        },
+        alternateRowStyles: {
+            fillColor: [12, 12, 30]
+        },
+        margin: { left: 14, right: 14 }
+    });
+
+    // Footer
+    var pageCount = doc.internal.getNumberOfPages();
+    for (var p = 1; p <= pageCount; p++) {
+        doc.setPage(p);
+        doc.setFontSize(7);
+        doc.setTextColor(85, 85, 119);
+        doc.text("Trade Halley v3.2 \u2014 P\u00e1gina " + p + "/" + pageCount, 14, doc.internal.pageSize.getHeight() - 8);
+    }
+
+    var fileName = "backtest_resultado_" + getTodayStr() + ".pdf";
+    doc.save(fileName);
+}
+
+// ============================================================
+// EXPORT XLSX (SheetJS)
+// ============================================================
+function exportResultsXLSX(tableId) {
+    var table = document.getElementById(tableId);
+    if (!table) { alert("Nenhuma tabela encontrada."); return; }
+
+    if (typeof XLSX === "undefined") { alert("Biblioteca SheetJS n\u00e3o carregada. Recarregue a p\u00e1gina."); return; }
+
+    // Extract headers
+    var headers = [];
+    table.querySelectorAll("thead th").forEach(function(th) {
+        var text = th.textContent.replace(/[\u21C5\u25B2\u25BC]/g, "").trim();
+        headers.push(text);
+    });
+
+    // Extract body as objects
+    var data = [];
+    table.querySelectorAll("tbody tr").forEach(function(tr) {
+        var rowObj = {};
+        tr.querySelectorAll("td").forEach(function(td, idx) {
+            var key = headers[idx] || ("Col" + idx);
+            var val = td.textContent.trim();
+            // Try to convert numeric values
+            var numVal = parseFloat(val.replace(/[%\s]/g, "").replace(/\./g, "").replace(",", "."));
+            if (idx > 0 && !isNaN(numVal)) {
+                rowObj[key] = numVal;
+            } else {
+                rowObj[key] = val;
+            }
+        });
+        if (Object.keys(rowObj).length > 0) data.push(rowObj);
+    });
+
+    // Build workbook
+    var ws = XLSX.utils.json_to_sheet(data, { header: headers });
+
+    // Set column widths
+    var colWidths = headers.map(function(h) {
+        return { wch: Math.max(h.length + 2, 14) };
+    });
+    ws["!cols"] = colWidths;
+
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Backtest");
+
+    // Determine filename from first ticker
+    var firstTicker = "B3";
+    if (data.length > 0) {
+        var firstVal = data[0][headers[0]] || "B3";
+        if (data.length === 1) {
+            firstTicker = firstVal;
+        } else {
+            firstTicker = "B3_" + data.length + "ativos";
+        }
+    }
+
+    var fileName = "backtest_" + firstTicker + "_" + getTodayStr() + ".xlsx";
+    XLSX.writeFile(wb, fileName);
+}
