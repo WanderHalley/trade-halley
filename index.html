@@ -545,22 +545,24 @@
 
 <script>
 (function() {
-    const sidebar = document.getElementById('sidebar');
-    const mainContent = document.getElementById('mainContent');
-    const collapseBtn = document.getElementById('sidebarCollapseBtn');
-    const collapseIcon = document.getElementById('collapseIcon');
-    const menuToggle = document.getElementById('menuToggle');
-    const sidebarClose = document.getElementById('sidebarClose');
-    const overlay = document.getElementById('sidebarOverlay');
+    var sidebar = document.getElementById('sidebar');
+    var mainContent = document.getElementById('mainContent');
+    var collapseBtn = document.getElementById('sidebarCollapseBtn');
+    var menuToggle = document.getElementById('menuToggle');
+    var sidebarClose = document.getElementById('sidebarClose');
+    var overlay = document.getElementById('sidebarOverlay');
 
-    function isMobile() {
-        return window.innerWidth <= 768;
+    function isMobile() { return window.innerWidth <= 768; }
+
+    function closeMobileSidebar() {
+        if (sidebar) sidebar.classList.remove('mobile-open');
+        if (overlay) overlay.classList.remove('active');
     }
 
-    // Desktop: collapse/expand sidebar
+    // Desktop: collapse/expand
     if (collapseBtn) {
         collapseBtn.addEventListener('click', function() {
-            if (isMobile()) return; // no-op on mobile
+            if (isMobile()) return;
             sidebar.classList.toggle('collapsed');
             mainContent.classList.toggle('sidebar-collapsed');
         });
@@ -574,31 +576,22 @@
         });
     }
 
-    // Mobile: close sidebar via X button
+    // Mobile: close via X
     if (sidebarClose) {
-        sidebarClose.addEventListener('click', function() {
-            sidebar.classList.remove('mobile-open');
-            overlay.classList.remove('active');
-        });
+        sidebarClose.addEventListener('click', closeMobileSidebar);
     }
 
-    // Mobile: close sidebar via overlay tap
+    // Mobile: close via overlay tap
     if (overlay) {
-        overlay.addEventListener('click', function() {
-            sidebar.classList.remove('mobile-open');
-            overlay.classList.remove('active');
-        });
+        overlay.addEventListener('click', closeMobileSidebar);
     }
 
-    // On resize, clean up classes
+    // On resize cleanup
     window.addEventListener('resize', function() {
-        if (!isMobile()) {
-            sidebar.classList.remove('mobile-open');
-            overlay.classList.remove('active');
-        }
+        if (!isMobile()) closeMobileSidebar();
     });
 
-    // Show/hide custom tickers field
+    // Show/hide custom tickers
     ['daily', 'intra', 'bmf'].forEach(function(prefix) {
         var marketSel = document.getElementById(prefix + '-market');
         var tickersWrap = document.getElementById(prefix + '-tickers-wrap');
@@ -608,8 +601,29 @@
             });
         }
     });
+
+    // ========================================
+    // NAV-LINK CLICK → navigate + close sidebar
+    // ========================================
+    document.querySelectorAll('.nav-link[data-page]').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            var page = this.getAttribute('data-page');
+            if (page && typeof navigate === 'function') {
+                navigate(page);
+            }
+            // Always close mobile sidebar after navigation
+            closeMobileSidebar();
+        });
+    });
+
+    // Auto-navigate to daily on load
+    if (typeof navigate === 'function') {
+        navigate('daily');
+    }
 })();
 </script>
+
 
 </body>
 </html>
