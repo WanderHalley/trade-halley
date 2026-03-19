@@ -339,3 +339,27 @@ code{background:var(--bg-tertiary);padding:.15rem .4rem;border-radius:4px;font-s
 .assets-stored-table .table{font-size:.78rem}
 .assets-stored-table .table th{font-size:.7rem}
 .no-assets-msg{text-align:center;padding:2rem;color:var(--text-muted);font-size:.85rem}
+/* ─── Results Scroll Fix ─── */
+.results-scroll-wrapper{
+    overflow-x:auto!important;
+    overflow-y:visible!important;
+    width:100%;
+    display:block;
+    -webkit-overflow-scrolling:touch;
+    padding-bottom:8px;
+}
+.results-scroll-wrapper::-webkit-scrollbar{
+    height:12px!important;
+}
+.results-scroll-wrapper::-webkit-scrollbar-track{
+    background:#0a0a1a;
+    border-radius:6px;
+}
+.results-scroll-wrapper::-webkit-scrollbar-thumb{
+    background:var(--green-primary);
+    border-radius:6px;
+}
+.results-scroll-wrapper::-webkit-scrollbar-thumb:hover{
+    background:var(--green-hover);
+}
+
