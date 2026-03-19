@@ -243,19 +243,23 @@ select.form-input{cursor:pointer;-webkit-appearance:none;appearance:none;backgro
    RESULTS TABLE — Scroll + Centralizado
    ═══════════════════════════════════════════ */
 .results-scroll-wrapper{
-    overflow-x:auto!important;
+    overflow-x:scroll!important;
     overflow-y:visible!important;
+    max-width:100%;
     width:100%;
     display:block;
     -webkit-overflow-scrolling:touch;
-    padding-bottom:10px;
+    padding-bottom:2px;
     margin-top:1rem;
     border:1px solid var(--border-color);
     border-radius:var(--radius-md);
     background:var(--glass-bg);
+    scrollbar-width:thin;
+    scrollbar-color:var(--green-primary) #0a0a1a;
 }
 .results-scroll-wrapper::-webkit-scrollbar{
     height:14px!important;
+    display:block!important;
 }
 .results-scroll-wrapper::-webkit-scrollbar-track{
     background:#0a0a1a;
