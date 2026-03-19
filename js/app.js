@@ -676,7 +676,7 @@ async function runDailyBacktest() {
     const startDate = document.getElementById("daily-start-date")?.value || "";
     const endDate = document.getElementById("daily-end-date")?.value || "";
     const tickersInput = document.getElementById("daily-tickers")?.value?.trim() || "";
-    const market = document.getElementById("daily-market")?.value || "";
+    const market = document.getElementById("daily-market")?.value || "b3";
 
     if (!entryStrategy || !exitStrategy) { alert("Selecione as estratégias de entrada e saída."); return; }
 
@@ -693,10 +693,9 @@ async function runDailyBacktest() {
             end_date: endDate || null
         };
 
-        if (tickersInput) {
+        if (market === "custom" && tickersInput) {
             body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
         } else {
-            // "B3 — Todos" ou default: envia market para o backend resolver via Supabase
             body.market = "b3";
         }
 
@@ -708,6 +707,100 @@ async function runDailyBacktest() {
         alert("Erro ao executar backtest: " + e.message);
     } finally {
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play"></i> Executar Back-teste'; }
+    }
+}
+
+async function runIntradayBacktest() {
+    const entryStrategy = document.getElementById("intra-entry-strategy")?.value;
+    const exitStrategy = document.getElementById("intra-exit-strategy")?.value;
+    const direction = document.getElementById("intra-direction")?.value || "compra";
+    const variationPct = parseFloat(document.getElementById("intra-variation")?.value || "0");
+    const hourStart = document.getElementById("intra-hour-start")?.value || "09:00";
+    const hourEnd = document.getElementById("intra-hour-end")?.value || "17:00";
+    const startDate = document.getElementById("intra-start-date")?.value || "";
+    const endDate = document.getElementById("intra-end-date")?.value || "";
+    const tickersInput = document.getElementById("intra-tickers")?.value?.trim() || "";
+    const market = document.getElementById("intra-market")?.value || "b3";
+
+    if (!entryStrategy || !exitStrategy) { alert("Selecione as estratégias."); return; }
+
+    const btn = document.getElementById("intra-run-btn");
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...'; }
+
+    try {
+        const body = {
+            entry_strategy: entryStrategy,
+            exit_strategy: exitStrategy,
+            direction,
+            variation_pct: variationPct,
+            hour_start: hourStart,
+            hour_end: hourEnd,
+            period: "3mo",
+            start_date: startDate || null,
+            end_date: endDate || null
+        };
+
+        if (market === "custom" && tickersInput) {
+            body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
+        } else {
+            body.market = "b3";
+        }
+
+        const result = await apiPost("/backtest/intraday", body);
+        if (!result) { alert("Erro ao executar backtest intraday."); return; }
+        displayResults("intra-results", "intra-results-table", result);
+    } catch (e) {
+        console.error("runIntradayBacktest error:", e);
+        alert("Erro ao executar backtest: " + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play"></i> Executar Back-teste Intraday B3'; }
+    }
+}
+
+async function runBmfIntradayBacktest() {
+    const entryStrategy = document.getElementById("bmf-entry-strategy")?.value;
+    const exitStrategy = document.getElementById("bmf-exit-strategy")?.value;
+    const direction = document.getElementById("bmf-direction")?.value || "compra";
+    const variationPct = parseFloat(document.getElementById("bmf-variation")?.value || "0");
+    const hourStart = document.getElementById("bmf-hour-start")?.value || "09:00";
+    const hourEnd = document.getElementById("bmf-hour-end")?.value || "17:00";
+    const startDate = document.getElementById("bmf-start-date")?.value || "";
+    const endDate = document.getElementById("bmf-end-date")?.value || "";
+    const tickersInput = document.getElementById("bmf-tickers")?.value?.trim() || "";
+    const market = document.getElementById("bmf-market")?.value || "bmf";
+
+    if (!entryStrategy || !exitStrategy) { alert("Selecione as estratégias."); return; }
+
+    const btn = document.getElementById("bmf-run-btn");
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...'; }
+
+    try {
+        const body = {
+            entry_strategy: entryStrategy,
+            exit_strategy: exitStrategy,
+            direction,
+            variation_pct: variationPct,
+            hour_start: hourStart,
+            hour_end: hourEnd,
+            period: "3mo",
+            start_date: startDate || null,
+            end_date: endDate || null
+        };
+
+        if (market === "custom" && tickersInput) {
+            body.tickers = tickersInput.split(",").map(t => t.trim().toUpperCase()).filter(t => t);
+        } else {
+            body.market = "bmf";
+        }
+
+        const result = await apiPost("/backtest/intraday", body);
+        if (!result) { alert("Erro ao executar backtest BMF."); return; }
+        displayResults("bmf-results", "bmf-results-table", result);
+    } catch (e) {
+        console.error("runBmfIntradayBacktest error:", e);
+        alert("Erro ao executar backtest: " + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play"></i> Executar Back-teste BMF Intraday'; }
     }
 }
 
