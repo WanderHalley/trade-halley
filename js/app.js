@@ -72,7 +72,7 @@ async function fetchAllBrapiTickers(type) {
 }
 
 // ─── Navigation ───
-let currentPage = "dashboard";
+let currentPage = "daily";
 
 function navigate(page) {
     currentPage = page;
@@ -87,7 +87,6 @@ function navigate(page) {
     document.getElementById("sidebar")?.classList.remove("open");
 
     switch (page) {
-        case "dashboard": loadDashboard(); break;
         case "daily": loadDailyPage(); break;
         case "intraday": loadIntradayPage(); break;
         case "bmf-intraday": loadBmfIntradayPage(); break;
@@ -959,5 +958,5 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Load dashboard
-    navigate("dashboard");
+    navigate("daily");
 });
