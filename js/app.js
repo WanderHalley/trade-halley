@@ -901,6 +901,10 @@ function displayResults(containerId, tableId, result) {
 
     tableHTML += `</tbody></table>`;
 
+    container.innerHTML = `<div class="results-scroll-wrapper" style="overflow-x:auto;overflow-y:visible;width:100%;display:block;-webkit-overflow-scrolling:touch;padding-bottom:4px;">${tableHTML}</div>`;
+
+    makeSortable(tableId);
+}
     // Summary footer
     const totalTrades = rows.reduce((s,r) => s + (r.total_trades||0), 0);
     const avgResult = rows.length > 0 ? rows.reduce((s,r) => s + (r.resultado_pct||0), 0) / rows.length : 0;
