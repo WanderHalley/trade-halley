@@ -2,7 +2,7 @@
 // js/app.js — Trade Halley Frontend v3.2 (FIXED)
 // ============================================================
 
-const API_BASE = "https://wanderhalleylee-trade-halley.hf.space";
+var API_BASE = "https://wanderhalleylee-trade-halley.hf.space";
 
 function getBrapiToken() { return localStorage.getItem("brapi_token") || "ktC3hLVgH3QXrFnssfbcUj"; }
 function setBrapiToken(token) { localStorage.setItem("brapi_token", token); }
@@ -17,36 +17,19 @@ async function apiGet(path) {
     } catch (e) { console.error("GET " + path + ":", e); return null; }
 }
 
-async function apiPost(path, body, timeoutMs) {
-    var controller = null;
-    var timer = null;
-    if (timeoutMs) {
-        controller = new AbortController();
-        timer = setTimeout(function() { controller.abort(); }, timeoutMs);
-    }
+async function apiPost(path, body) {
     try {
-        var opts = {
+        var resp = await fetch(API_BASE + path, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body)
-        };
-        if (controller) opts.signal = controller.signal;
-        var resp = await fetch(API_BASE + path, opts);
-        if (timer) clearTimeout(timer);
+        });
         if (!resp.ok) {
             var txt = await resp.text();
             throw new Error("HTTP " + resp.status + ": " + txt);
         }
         return await resp.json();
-    } catch (e) {
-        if (timer) clearTimeout(timer);
-        if (e.name === "AbortError") {
-            console.error("POST " + path + ": Timeout após " + (timeoutMs / 1000) + "s");
-            return null;
-        }
-        console.error("POST " + path + ":", e);
-        return null;
-    }
+    } catch (e) { console.error("POST " + path + ":", e); return null; }
 }
 
 async function apiDelete(path) {
@@ -81,9 +64,6 @@ async function fetchAllBrapiTickers(type) {
     return tickers;
 }
 
-// ============================================================
-// NAVIGATION
-// ============================================================
 var currentPage = "daily";
 
 function navigate(page) {
@@ -94,7 +74,6 @@ function navigate(page) {
     document.querySelectorAll(".nav-link").forEach(function(el) { el.classList.remove("active"); });
     var navLink = document.querySelector('.nav-link[data-page="' + page + '"]');
     if (navLink) navLink.classList.add("active");
-    // Close sidebar on mobile (fix: use both "open" and "mobile-open")
     var sb = document.getElementById("sidebar");
     if (sb) { sb.classList.remove("open"); sb.classList.remove("mobile-open"); }
     var ov = document.getElementById("sidebarOverlay");
@@ -109,9 +88,6 @@ function navigate(page) {
     }
 }
 
-// ============================================================
-// UTILITIES
-// ============================================================
 function fmtPct(val) {
     if (val === null || val === undefined || isNaN(val)) return "0%";
     return val.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 3 }) + "%";
@@ -146,9 +122,6 @@ function populateSelect(selectId, options, defaultVal) {
     });
 }
 
-// ============================================================
-// SORTABLE TABLES
-// ============================================================
 var sortState = {};
 
 function makeSortable(tableId) {
@@ -202,9 +175,6 @@ function sortTable(tableId, colIdx) {
     rows.forEach(function(row) { tbody.appendChild(row); });
 }
 
-// ============================================================
-// DIRECTION BUTTONS
-// ============================================================
 function setupDirectionButtons(buyBtnId, sellBtnId, hiddenFieldId) {
     var buyBtn = document.getElementById(buyBtnId);
     var sellBtn = document.getElementById(sellBtnId);
@@ -220,56 +190,11 @@ function setupDirectionButtons(buyBtnId, sellBtnId, hiddenFieldId) {
     });
 }
 
-// ============================================================
-// BACKTEST PROGRESS BAR HELPER
-// ============================================================
-function showBacktestProgress(containerId) {
-    var container = document.getElementById(containerId);
-    if (!container) return;
-    container.innerHTML = '<div class="backtest-progress-box" style="' +
-        "margin-top:1rem;padding:1.2rem;background:rgba(16,16,40,0.7);" +
-        "border:1px solid rgba(255,255,255,0.08);border-radius:12px;" +
-        '">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem;">' +
-        '<span style="color:#8888aa;font-size:.85rem;font-weight:600;">' +
-        '<i class="fas fa-spinner fa-spin" style="margin-right:.4rem;color:#00d4a1;"></i> Executando back-teste...</span>' +
-        '<span class="bt-progress-timer" style="color:#8888aa;font-size:.8rem;">0s</span>' +
-        '</div>' +
-        '<div style="height:8px;background:#12122a;border-radius:4px;overflow:hidden;">' +
-        '<div class="bt-progress-bar" style="height:100%;width:5%;background:linear-gradient(90deg,#00d4a1,#4facfe);border-radius:4px;transition:width .4s ease;"></div>' +
-        '</div>' +
-        '<p style="color:#555577;font-size:.78rem;margin-top:.5rem;margin-bottom:0;">' +
-        'O servidor est\u00e1 processando todos os ativos. Isso pode levar de 30 segundos a alguns minutos...</p>' +
-        '</div>';
-    var startTime = Date.now();
-    var barEl = container.querySelector(".bt-progress-bar");
-    var timerEl = container.querySelector(".bt-progress-timer");
-    var interval = setInterval(function() {
-        var elapsed = Math.round((Date.now() - startTime) / 1000);
-        if (timerEl) timerEl.textContent = elapsed + "s";
-        if (barEl) {
-            var pct = Math.min(5 + elapsed * 0.5, 90);
-            barEl.style.width = pct + "%";
-        }
-        if (!container.querySelector(".backtest-progress-box")) clearInterval(interval);
-    }, 1000);
-    container._progressInterval = interval;
-}
-
-function clearBacktestProgress(containerId) {
-    var container = document.getElementById(containerId);
-    if (!container) return;
-    if (container._progressInterval) { clearInterval(container._progressInterval); container._progressInterval = null; }
-}
-
-// ============================================================
-// STRATEGIES PAGE
-// ============================================================
 async function loadStrategiesPage() {
     var data = await apiGet("/strategies/all");
     var container = document.getElementById("strategies-container");
     if (!container) return;
-    if (!data) { container.innerHTML = '<p class="text-muted">Erro ao carregar estrat\u00e9gias.</p>'; return; }
+    if (!data) { container.innerHTML = '<p class="text-muted">Erro ao carregar estratégias.</p>'; return; }
     var html = "";
     function buildSection(icon, title, items, cols) {
         if (!items || items.length === 0) return "";
@@ -293,16 +218,12 @@ async function loadStrategiesPage() {
     container.innerHTML = html;
 }
 
-// ============================================================
-// SAVED BACKTESTS
-// ============================================================
 async function loadSavedPage() {
     var data = await apiGet("/backtests/saved");
     var container = document.getElementById("saved-container");
     if (!container) return;
     if (!data || !data.backtests || data.backtests.length === 0) {
-        container.innerHTML = '<p class="text-muted">Nenhum backtest salvo.</p>';
-        return;
+        container.innerHTML = '<p class="text-muted">Nenhum backtest salvo.</p>'; return;
     }
     var html = '<div class="table-responsive"><table class="table table-dark table-sm"><thead><tr>';
     html += '<th>Ticker</th><th>Estrat\u00e9gia</th><th>Resultado</th><th>Data</th><th>A\u00e7\u00f5es</th></tr></thead><tbody>';
@@ -323,9 +244,6 @@ async function deleteSavedBacktest(id) {
     loadSavedPage();
 }
 
-// ============================================================
-// CONFIG PAGE
-// ============================================================
 var configAuthenticated = false;
 
 async function loadConfigPage() {
@@ -606,7 +524,6 @@ async function runDailyBacktest() {
     if (!entryStrategy || !exitStrategy) { alert("Selecione as estrat\u00e9gias de entrada e sa\u00edda."); return; }
     var btn = document.getElementById("daily-run-btn");
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...'; }
-    showBacktestProgress("daily-results");
     try {
         var body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction: direction, variation_pct: variationPct, start_date: startDate || null, end_date: endDate || null };
         if (marketSel === "custom" && tickersInput) {
@@ -614,12 +531,10 @@ async function runDailyBacktest() {
         } else {
             body.market = "b3";
         }
-        var result = await apiPost("/backtest/daily", body, 300000);
-        clearBacktestProgress("daily-results");
-        if (!result) { document.getElementById("daily-results").innerHTML = '<p class="text-muted" style="padding:1rem">Erro ao executar backtest. O servidor pode ter demorado demais. Tente com menos ativos.</p>'; return; }
+        var result = await apiPost("/backtest/daily", body);
+        if (!result) { alert("Erro ao executar backtest."); return; }
         displayResults("daily-results", "daily-results-table", result);
     } catch (e) {
-        clearBacktestProgress("daily-results");
         console.error("runDailyBacktest error:", e);
         alert("Erro ao executar backtest: " + e.message);
     } finally {
@@ -656,7 +571,6 @@ async function runIntradayBacktest() {
     if (!entryStrategy || !exitStrategy) { alert("Selecione as estrat\u00e9gias."); return; }
     var btn = document.getElementById("intra-run-btn");
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...'; }
-    showBacktestProgress("intra-results");
     try {
         var body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction: direction, variation_pct: variationPct, hour_start: hourStart, hour_end: hourEnd, period: "3mo", start_date: startDate || null, end_date: endDate || null };
         if (marketSel === "custom" && tickersInput) {
@@ -664,12 +578,10 @@ async function runIntradayBacktest() {
         } else {
             body.market = "b3";
         }
-        var result = await apiPost("/backtest/intraday", body, 300000);
-        clearBacktestProgress("intra-results");
-        if (!result) { document.getElementById("intra-results").innerHTML = '<p class="text-muted" style="padding:1rem">Erro ao executar backtest. Tente com menos ativos.</p>'; return; }
+        var result = await apiPost("/backtest/intraday", body);
+        if (!result) { alert("Erro ao executar backtest intraday."); return; }
         displayResults("intra-results", "intra-results-table", result);
     } catch (e) {
-        clearBacktestProgress("intra-results");
         console.error("runIntradayBacktest error:", e);
         alert("Erro ao executar backtest: " + e.message);
     } finally {
@@ -706,7 +618,6 @@ async function runBmfIntradayBacktest() {
     if (!entryStrategy || !exitStrategy) { alert("Selecione as estrat\u00e9gias."); return; }
     var btn = document.getElementById("bmf-run-btn");
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...'; }
-    showBacktestProgress("bmf-results");
     try {
         var body = { entry_strategy: entryStrategy, exit_strategy: exitStrategy, direction: direction, variation_pct: variationPct, hour_start: hourStart, hour_end: hourEnd, period: "3mo", start_date: startDate || null, end_date: endDate || null };
         if (marketSel === "custom" && tickersInput) {
@@ -714,12 +625,10 @@ async function runBmfIntradayBacktest() {
         } else {
             body.market = "bmf";
         }
-        var result = await apiPost("/backtest/intraday", body, 300000);
-        clearBacktestProgress("bmf-results");
-        if (!result) { document.getElementById("bmf-results").innerHTML = '<p class="text-muted" style="padding:1rem">Erro ao executar backtest BMF. Tente com menos ativos.</p>'; return; }
+        var result = await apiPost("/backtest/intraday", body);
+        if (!result) { alert("Erro ao executar backtest BMF."); return; }
         displayResults("bmf-results", "bmf-results-table", result);
     } catch (e) {
-        clearBacktestProgress("bmf-results");
         console.error("runBmfIntradayBacktest error:", e);
         alert("Erro ao executar backtest: " + e.message);
     } finally {
@@ -728,7 +637,7 @@ async function runBmfIntradayBacktest() {
 }
 
 // ============================================================
-// SHARED RESULTS DISPLAY (COMPLETE — FIXED)
+// SHARED RESULTS DISPLAY (COMPLETE)
 // ============================================================
 function displayResults(containerId, tableId, result) {
     var container = document.getElementById(containerId);
@@ -753,7 +662,6 @@ function displayResults(containerId, tableId, result) {
         return;
     }
 
-    // Scoped scrollbar style
     var styleId = tableId + "-scroll-style";
     var styleEl = document.getElementById(styleId);
     if (!styleEl) {
@@ -768,13 +676,13 @@ function displayResults(containerId, tableId, result) {
         "#" + containerId + " .results-scroll-wrapper::-webkit-scrollbar-thumb:hover{background:#00b88a}";
 
     var thS = "padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;text-align:center;";
+    var thSL = "padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;text-align:left;";
     var tdS = "padding:.6rem .8rem;border-bottom:1px solid rgba(255,255,255,0.04);color:#e0e0e0;white-space:nowrap;text-align:center;";
-    var tdSLeft = "padding:.6rem .8rem;border-bottom:1px solid rgba(255,255,255,0.04);color:#e0e0e0;white-space:nowrap;text-align:left;";
-    var thSLeft = "padding:.7rem .8rem;background:#12122a;color:#8888aa;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;text-align:left;";
+    var tdSL = "padding:.6rem .8rem;border-bottom:1px solid rgba(255,255,255,0.04);color:#e0e0e0;white-space:nowrap;text-align:left;";
 
     var t = '<table id="' + tableId + '" style="min-width:1400px;width:max-content;white-space:nowrap;table-layout:auto;border-collapse:collapse;font-size:.83rem;">';
     t += '<thead><tr>';
-    t += '<th style="' + thSLeft + '">A\u00c7\u00c3O</th>';
+    t += '<th style="' + thSL + '">A\u00c7\u00c3O</th>';
     t += '<th style="' + thS + '">TOTAL GAIN</th>';
     t += '<th style="' + thS + '">% GAIN</th>';
     t += '<th style="' + thS + '">TOTAL LOSS</th>';
@@ -795,7 +703,7 @@ function displayResults(containerId, tableId, result) {
         var gaColor = (r.ganho_medio_pct || 0) > 0 ? "color:#00d4a1" : (r.ganho_medio_pct || 0) < 0 ? "color:#ff4757" : "color:#e0e0e0";
 
         t += '<tr>';
-        t += '<td style="' + tdSLeft + '"><strong>' + (r.acao || r.ticker || "") + '</strong></td>';
+        t += '<td style="' + tdSL + '"><strong>' + (r.acao || r.ticker || "") + '</strong></td>';
         t += '<td style="' + tdS + 'color:#00d4a1">' + (r.total_gain || 0) + '</td>';
         t += '<td style="' + tdS + 'color:#00d4a1">' + fmtPct(r.pct_gain) + '</td>';
         t += '<td style="' + tdS + 'color:#ff4757">' + (r.total_loss || 0) + '</td>';
@@ -811,55 +719,9 @@ function displayResults(containerId, tableId, result) {
 
     t += '</tbody></table>';
 
-    // Summary line
-    var totalTrades = 0, totalGain = 0, totalLoss = 0;
-    for (var j = 0; j < rows.length; j++) {
-        totalTrades += (rows[j].total_trades || 0);
-        totalGain += (rows[j].total_gain || 0);
-        totalLoss += (rows[j].total_loss || 0);
-    }
-
-    var summary = '<div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-top:.8rem;padding:.6rem 0;font-size:.82rem;color:#8888aa;">';
-    summary += '<span><strong style="color:#e0e0e0">' + rows.length + '</strong> ativos analisados</span>';
-    summary += '<span>Total trades: <strong style="color:#e0e0e0">' + totalTrades + '</strong></span>';
-    summary += '<span>Gains: <strong style="color:#00d4a1">' + totalGain + '</strong></span>';
-    summary += '<span>Losses: <strong style="color:#ff4757">' + totalLoss + '</strong></span>';
-    summary += '</div>';
-
-    container.innerHTML = '<div class="results-scroll-wrapper" style="overflow-x:scroll!important;overflow-y:visible!important;max-width:100%;width:100%;display:block;-webkit-overflow-scrolling:touch;padding-bottom:4px;margin-top:1rem;border:1px solid rgba(255,255,255,0.08);border-radius:12px;background:rgba(18,18,48,0.55);scrollbar-width:thin;scrollbar-color:#00d4a1 #0a0a1a;">' + t + '</div>' + summary;
-
+    container.innerHTML = '<div class="results-scroll-wrapper">' + t + '</div>';
     makeSortable(tableId);
 }
-
 // ============================================================
-// DASHBOARD (placeholder — loads daily by default)
+// END OF FILE
 // ============================================================
-async function loadDashboard() {
-    // If a dashboard page exists, load stats; otherwise no-op
-    var container = document.getElementById("dashboard-container");
-    if (!container) return;
-    container.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Carregando dashboard...</p></div>';
-    var stats = await apiGet("/dashboard");
-    if (!stats) { container.innerHTML = '<p class="text-muted">Erro ao carregar dashboard.</p>'; return; }
-    container.innerHTML = '<div class="stats-grid">' +
-        '<div class="stat-mini"><div class="stat-val">' + (stats.total_assets || 0) + '</div><div class="stat-lbl">Ativos</div></div>' +
-        '<div class="stat-mini"><div class="stat-val">' + (stats.total_backtests || 0) + '</div><div class="stat-lbl">Backtests</div></div>' +
-        '</div>';
-}
-
-// ============================================================
-// INITIALIZATION
-// ============================================================
-document.addEventListener("DOMContentLoaded", function() {
-    // Attach navigation listeners to all nav-links
-    document.querySelectorAll(".nav-link[data-page]").forEach(function(link) {
-        link.addEventListener("click", function(e) {
-            e.preventDefault();
-            var page = this.getAttribute("data-page");
-            if (page) navigate(page);
-        });
-    });
-
-    // Load initial page
-    navigate("daily");
-});
