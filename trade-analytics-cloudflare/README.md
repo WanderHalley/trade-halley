@@ -1,4 +1,4 @@
-# Halley Trade Analytics
+# Analytics Halley
 
 Sistema de análise de operações preparado para Cloudflare Pages.
 
@@ -14,11 +14,11 @@ Sistema de análise de operações preparado para Cloudflare Pages.
 - dados da aplicação salvos automaticamente no navegador via localStorage.
 
 ## Branch para deploy
-Use a branch `trade-analytics-cloudflare`.
+Use a branch `analytics-halley`.
 
 ## Configuração no Cloudflare Pages
 1. Crie um projeto em **Workers & Pages** conectado ao repositório `WanderHalley/trade-halley`.
-2. Production branch: `trade-analytics-cloudflare`.
+2. Production branch: `analytics-halley`.
 3. Framework preset: **None**.
 4. Build command: deixe vazio.
 5. Build output directory: `trade-analytics-cloudflare`.
