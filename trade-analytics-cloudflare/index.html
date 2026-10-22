@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Halley Trade Analytics</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="toprow">
+      <div class="brand"><div class="brandmark">HA</div>Halley Trade Analytics</div>
+      <div class="actions">
+        <button class="btn" id="btnNewAccount">+ Nova conta</button>
+        <button class="btn" id="btnRenameAccount">Editar conta</button>
+        <button class="btn primary" id="btnUpload">Importar CSV</button>
+        <a class="btn" href="/__logout" style="text-decoration:none">Sair</a>
+        <input id="fileInput" type="file" accept=".csv,text/csv" class="hidden">
+      </div>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div>
+      <h1>Análise profissional da conta</h1>
+      <p>Importação incremental: operações já salvas não são alteradas. Novos CSVs acrescentam somente trades ainda não existentes.</p>
+    </div>
+    <div class="accountbox">
+      <select id="accountSelect"></select>
+    </div>
+  </section>
+
+  <main id="mainContent"></main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<dialog id="accountDialog">
+  <form method="dialog" id="accountForm">
+    <div class="dialog-title"><h3 id="accountDialogTitle">Nova conta</h3><button value="cancel" class="btn ghost">Fechar</button></div>
+    <div class="field"><label>Nome da conta</label><input id="accountName" required maxlength="80" placeholder="Ex.: TPT PRO 25K"></div>
+    <div class="dialog-actions">
+      <button value="cancel" class="btn">Cancelar</button>
+      <button value="default" class="btn primary" id="accountSave">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="tradeDialog">
+  <form method="dialog" id="tradeForm">
+    <div class="dialog-title"><h3>Editar operação</h3><button value="cancel" class="btn ghost">Fechar</button></div>
+    <div class="form-grid">
+      <div class="field"><label>Símbolo</label><input id="eSymbol"></div>
+      <div class="field"><label>Nº negociação</label><input id="eTradeNo"></div>
+      <div class="field"><label>Direção</label><select id="eDirection"><option value="Compra">Compra</option><option value="Venda">Venda</option></select></div>
+      <div class="field"><label>Quantidade</label><input id="eQty" type="number" step="any"></div>
+      <div class="field"><label>Entrada</label><input id="eEntryTime" type="datetime-local"></div>
+      <div class="field"><label>Saída</label><input id="eExitTime" type="datetime-local"></div>
+      <div class="field"><label>Preço entrada</label><input id="eEntryPrice" type="number" step="any"></div>
+      <div class="field"><label>Preço saída</label><input id="eExitPrice" type="number" step="any"></div>
+      <div class="field"><label>L&P líquido USD</label><input id="ePnl" type="number" step="any"></div>
+      <div class="field"><label>Comissão USD</label><input id="eCommission" type="number" step="any"></div>
+    </div>
+    <p class="note">A edição não altera a chave original do CSV. Portanto, uma nova importação não sobrescreve suas alterações manuais.</p>
+    <div class="dialog-actions">
+      <button value="cancel" class="btn">Cancelar</button>
+      <button value="default" class="btn primary" id="tradeSave">Salvar alteração</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="analytics.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
